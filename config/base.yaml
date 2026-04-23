@@ -13,6 +13,7 @@ collectors:
 drivers:
   collector_sensor:
     i2c_sht40: growlab.collector.drivers.sensor.i2c_sht40:SHT40Driver
+    i2c_tsl2591: growlab.collector.drivers.sensor.i2c_tsl2591:TSL2591Driver
   actuator:
     tuya_outlet: growlab.core.drivers.actuator.tuya_outlet:TuyaOutletDriver
 
@@ -37,6 +38,31 @@ sensors:
         label: Humidity
         unit: "%"
 
+  light_lab:
+    label: Seedling Light
+    enabled: true
+    source:
+      kind: collector
+      collector_id: pi_zero_lab
+      driver: i2c_tsl2591
+      poll:
+        every_seconds: 60
+      config:
+        bus: 1
+        address: 41
+        gain: 1
+        integration: 1
+    metrics:
+      lux:
+        label: Lux
+        unit: lx
+      visible:
+        label: Visible
+        unit: raw
+      infrared:
+        label: Infrared
+        unit: raw
+
   soil_tray_1:
     label: Soil Tray 1
     enabled: true
@@ -56,9 +82,48 @@ actuators:
     enabled: true
     config:
       device_id: env:TUYA_FAN_DEVICE_ID
-      ip: env:TUYA_FAN_IP
+      ip: 192.168.68.112
       local_key: env:TUYA_FAN_LOCAL_KEY
-      version: 3.4
+      version: 3.5
+    commands:
+      power:
+        type: bool
+
+  water_pump:
+    label: Water Pump
+    driver: tuya_outlet
+    enabled: true
+    config:
+      device_id: env:TUYA_PUMP_DEVICE_ID
+      ip: 192.168.68.103
+      local_key: env:TUYA_PUMP_LOCAL_KEY
+      version: 3.5
+    commands:
+      power:
+        type: bool
+
+  warm_pads:
+    label: Warm Pads
+    driver: tuya_outlet
+    enabled: true
+    config:
+      device_id: env:TUYA_PADS_DEVICE_ID
+      ip: 192.168.68.104
+      local_key: env:TUYA_PADS_LOCAL_KEY
+      version: 3.5
+    commands:
+      power:
+        type: bool
+
+  lamps:
+    label: Lamps
+    driver: tuya_outlet
+    enabled: false  # not visible on LAN yet; set ip and enable once discovered
+    config:
+      device_id: env:TUYA_LAMPS_DEVICE_ID
+      ip: env:TUYA_LAMPS_IP
+      local_key: env:TUYA_LAMPS_LOCAL_KEY
+      version: 3.5
     commands:
       power:
         type: bool
@@ -100,8 +165,16 @@ dashboards:
       - panel: sensor_card
         entity: air_lab
       - panel: sensor_card
+        entity: light_lab
+      - panel: sensor_card
         entity: soil_tray_1
       - panel: actuator_card
         entity: exhaust_fan
+      - panel: actuator_card
+        entity: water_pump
+      - panel: actuator_card
+        entity: warm_pads
+      - panel: actuator_card
+        entity: lamps
       - panel: automation_card
         entity: fan_temp_control
