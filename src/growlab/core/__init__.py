@@ -1,1 +1,1 @@
-"""GrowLab core platform package."""
+"""garden_lab core platform package."""

@@ -1,0 +1,16 @@
+[Unit]
+Description=garden_lab local sensor collector
+After=network-online.target garden-lab-core.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/garden_lab
+EnvironmentFile=/home/pi/garden_lab/.env
+ExecStart=/home/pi/garden_lab/.venv/bin/python /home/pi/garden_lab/scripts/dev_collector.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

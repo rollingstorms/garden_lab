@@ -10,6 +10,7 @@ class AppConfig(BaseModel):
     timezone: str
     database_url: str
     ingest_base_url: str
+    automation_interval_seconds: int = Field(default=30, gt=0)
 
 
 class CollectorConfig(BaseModel):

@@ -1,1 +1,1 @@
-"""Typed configuration loading for GrowLab."""
+"""Typed configuration loading for garden_lab."""

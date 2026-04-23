@@ -1,8 +1,9 @@
 app:
-  name: GrowLab
+  name: garden_lab
   timezone: America/New_York
-  database_url: sqlite:///data/growlab.db
+  database_url: sqlite:///data/garden_lab.db
   ingest_base_url: http://127.0.0.1:8000
+  automation_interval_seconds: 30
 
 collectors:
   pi_zero_lab:
@@ -94,7 +95,7 @@ automations:
 
 dashboards:
   main:
-    title: Seedling Lab
+    title: garden_lab
     layout:
       - panel: sensor_card
         entity: air_lab

@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "growlab"
+name = "garden-lab"
 version = "0.1.0"
-description = "GrowLab core platform, collector runtime, and firmware scaffolding."
+description = "garden_lab core platform, collector runtime, and firmware scaffolding."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [

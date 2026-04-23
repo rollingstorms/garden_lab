@@ -1,1 +1,1 @@
-"""Collector runtime for local GrowLab sensors."""
+"""Collector runtime for local garden_lab sensors."""

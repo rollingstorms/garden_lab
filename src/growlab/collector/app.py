@@ -11,7 +11,7 @@ def run() -> None:
     base = Path(os.environ.get("GROWLAB_CONFIG_BASE", "config/base.yaml"))
     local = Path(os.environ.get("GROWLAB_CONFIG_LOCAL", "config/local.yaml"))
     config = load_config(base, local)
-    PollingService(config=config).run_once()
+    PollingService(config=config).run_forever()
 
 
 if __name__ == "__main__":

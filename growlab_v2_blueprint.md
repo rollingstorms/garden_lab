@@ -1,6 +1,6 @@
-# GrowLab V2 Blueprint
+# garden_lab V2 Blueprint
 
-This is the target architecture for the next GrowLab repo: a small platform with one registry, one data model, one API/web app/database core, and separate collection runtimes for local and remote sensors.
+This is the target architecture for the next `garden_lab` repo: a small platform with one registry, one data model, one API/web app/database core, and separate collection runtimes for local and remote sensors.
 
 ## Design Goals
 
@@ -202,9 +202,9 @@ Suggested baseline:
 
 ```yaml
 app:
-  name: GrowLab
+  name: garden_lab
   timezone: America/New_York
-  database_url: sqlite:///data/growlab.db
+  database_url: sqlite:///data/garden_lab.db
   ingest_base_url: http://gardenlab-core.local
 
 collectors:
@@ -631,7 +631,7 @@ Reasoning:
 ## Repo Layout
 
 ```text
-growlab/
+garden_lab/
   pyproject.toml
   README.md
   .env.example

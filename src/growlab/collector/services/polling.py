@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib
+import time
 from dataclasses import dataclass
+from typing import Optional
 
 from growlab.core.config.models import GrowLabConfig
 from growlab.collector.ingestion_client import IngestionClient
@@ -28,11 +30,12 @@ class PollingService:
         driver_cls = getattr(module, class_name)
         return driver_cls()
 
-    def run_once(self) -> dict:
+    def run_once(self, *, sensor_ids: Optional[set[str]] = None) -> dict:
         collector_sensors = {
             sensor_id: sensor
             for sensor_id, sensor in self.config.sensors.items()
             if sensor.source.kind == "collector"
+            and (sensor_ids is None or sensor_id in sensor_ids)
         }
         errors: list[str] = []
         posted_sensor_count = 0
@@ -85,3 +88,45 @@ class PollingService:
             "heartbeat_sent": result.heartbeat_sent,
             "errors": result.errors,
         }
+
+    def run_forever(self) -> None:
+        collector_sensors = {
+            sensor_id: sensor
+            for sensor_id, sensor in self.config.sensors.items()
+            if sensor.source.kind == "collector"
+        }
+        if not collector_sensors:
+            time.sleep(5)
+            return
+
+        next_due = {sensor_id: 0.0 for sensor_id in collector_sensors}
+        while True:
+            now = time.monotonic()
+            due_sensor_ids = [
+                sensor_id
+                for sensor_id, sensor in collector_sensors.items()
+                if now >= next_due[sensor_id]
+                and sensor.enabled
+            ]
+
+            if due_sensor_ids:
+                self.run_once(sensor_ids=set(due_sensor_ids))
+                now = time.monotonic()
+                for sensor_id, sensor in collector_sensors.items():
+                    if sensor_id in due_sensor_ids:
+                        next_due[sensor_id] = now + sensor.source.poll.every_seconds
+
+            enabled_sensor_ids = [
+                sensor_id
+                for sensor_id, sensor in collector_sensors.items()
+                if sensor.enabled
+            ]
+            if not enabled_sensor_ids:
+                time.sleep(5)
+                continue
+
+            sleep_for = min(
+                max(next_due[sensor_id] - time.monotonic(), 1.0)
+                for sensor_id in enabled_sensor_ids
+            )
+            time.sleep(sleep_for)

@@ -1,1 +1,1 @@
-"""FastAPI app factory and routes for GrowLab core."""
+"""FastAPI app factory and routes for garden_lab core."""

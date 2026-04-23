@@ -1,0 +1,16 @@
+[Unit]
+Description=garden_lab core API and dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/garden_lab
+EnvironmentFile=/home/pi/garden_lab/.env
+ExecStart=/home/pi/garden_lab/.venv/bin/python /home/pi/garden_lab/scripts/dev_core.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
