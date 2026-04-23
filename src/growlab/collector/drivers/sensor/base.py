@@ -1,0 +1,9 @@
+from __future__ import annotations
+
+from typing import Any, Protocol, Union
+
+
+class SensorDriver(Protocol):
+    def setup(self, config: dict[str, Any]) -> None: ...
+    def read(self) -> dict[str, Union[float, int, str, bool, None]]: ...
+    def health(self) -> dict[str, Any]: ...

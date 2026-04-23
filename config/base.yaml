@@ -1,0 +1,106 @@
+app:
+  name: GrowLab
+  timezone: America/New_York
+  database_url: sqlite:///data/growlab.db
+  ingest_base_url: http://127.0.0.1:8000
+
+collectors:
+  pi_zero_lab:
+    label: Lab Pi Zero
+    enabled: true
+
+drivers:
+  collector_sensor:
+    i2c_sht40: growlab.collector.drivers.sensor.i2c_sht40:SHT40Driver
+  actuator:
+    tuya_outlet: growlab.core.drivers.actuator.tuya_outlet:TuyaOutletDriver
+
+sensors:
+  air_lab:
+    label: Seedling Air
+    enabled: true
+    source:
+      kind: collector
+      collector_id: pi_zero_lab
+      driver: i2c_sht40
+      poll:
+        every_seconds: 60
+      config:
+        bus: 1
+        address: 68
+    metrics:
+      temperature_c:
+        label: Temperature
+        unit: C
+      humidity_pct:
+        label: Humidity
+        unit: "%"
+
+  soil_tray_1:
+    label: Soil Tray 1
+    enabled: true
+    source:
+      kind: remote
+      protocol: http_push
+      auth_token: env:SOIL_TRAY_1_TOKEN
+    metrics:
+      moisture_pct:
+        label: Moisture
+        unit: "%"
+
+actuators:
+  exhaust_fan:
+    label: Exhaust Fan
+    driver: tuya_outlet
+    enabled: true
+    config:
+      device_id: env:TUYA_FAN_DEVICE_ID
+      ip: env:TUYA_FAN_IP
+      local_key: env:TUYA_FAN_LOCAL_KEY
+      version: 3.4
+    commands:
+      power:
+        type: bool
+
+automations:
+  fan_temp_control:
+    enabled: true
+    mode: stateful
+    logic:
+      "on":
+        all:
+          - sensor: air_lab
+            metric: temperature_c
+            op: ">="
+            value: 28.0
+            for_seconds: 180
+      "off":
+        any:
+          - sensor: air_lab
+            metric: temperature_c
+            op: "<="
+            value: 25.5
+            for_seconds: 180
+    actions:
+      "on":
+        - actuator: exhaust_fan
+          command:
+            power: true
+      "off":
+        - actuator: exhaust_fan
+          command:
+            power: false
+    cooldown_seconds: 120
+
+dashboards:
+  main:
+    title: Seedling Lab
+    layout:
+      - panel: sensor_card
+        entity: air_lab
+      - panel: sensor_card
+        entity: soil_tray_1
+      - panel: actuator_card
+        entity: exhaust_fan
+      - panel: automation_card
+        entity: fan_temp_control

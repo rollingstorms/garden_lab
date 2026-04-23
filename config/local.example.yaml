@@ -1,0 +1,6 @@
+app:
+  ingest_base_url: http://gardenlab-core.local:8000
+
+collectors:
+  pi_zero_lab:
+    label: Bench Pi Zero

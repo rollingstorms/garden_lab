@@ -1,0 +1,10 @@
+.DS_Store
+.env
+config/local.yaml
+data/*.db
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/

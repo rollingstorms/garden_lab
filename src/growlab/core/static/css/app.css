@@ -1,0 +1,75 @@
+body {
+  font-family: sans-serif;
+  margin: 2rem;
+  background: #f5f7f4;
+  color: #1f2a1f;
+}
+
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.panel-card {
+  background: #fff;
+  border: 1px solid #d7e2d2;
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 8px 24px rgba(32, 55, 32, 0.06);
+}
+
+.panel-meta {
+  color: #5a7058;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.5rem;
+}
+
+.metric-list {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.metric-label {
+  color: #425441;
+}
+
+.metric-value {
+  font-weight: 700;
+}
+
+.history-block table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.history-block th,
+.history-block td {
+  font-size: 0.9rem;
+  text-align: left;
+  border-top: 1px solid #e3ebe0;
+  padding: 0.35rem 0;
+}
+
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f0f4ee;
+  padding: 0.75rem;
+  border-radius: 10px;
+}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block body %}
+<main>
+  <h1>{{ title }}</h1>
+  <div class="panel-grid">
+    {% for panel in panels %}
+    <section class="panel-card">
+      <div class="panel-meta">{{ panel.panel }}</div>
+      <h2>{{ panel.label }}</h2>
+
+      {% if panel.entity_type == "sensor" %}
+        <div class="metric-list">
+          {% for metric_id, metric in panel.metrics.items() %}
+          <div class="metric-row">
+            <span class="metric-label">{{ metric.label }}</span>
+            <span class="metric-value">
+              {% if panel.latest.get(metric_id) is not none %}
+                {{ panel.latest.get(metric_id) }}{% if metric.unit %} {{ metric.unit }}{% endif %}
+              {% else %}
+                No data
+              {% endif %}
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="history-block">
+          {% for metric_id, points in panel.history.items() %}
+          <h3>{{ panel.metrics[metric_id].label }}</h3>
+          {% if points %}
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for point in points[-5:] %}
+              <tr>
+                <td>{{ point.ts_utc }}</td>
+                <td>
+                  {% if point.value_num is not none %}
+                    {{ point.value_num }}
+                  {% else %}
+                    {{ point.value_text }}
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p>No history yet.</p>
+          {% endif %}
+          {% endfor %}
+        </div>
+      {% elif panel.entity_type == "actuator" %}
+        <p><strong>Driver:</strong> {{ panel.driver }}</p>
+        {% if panel.latest_event %}
+        <p><strong>Latest event:</strong> {{ panel.latest_event.event_type }} / {{ panel.latest_event.status }}</p>
+        <pre>{{ panel.latest_event.payload_json }}</pre>
+        {% else %}
+        <p>No commands recorded yet.</p>
+        {% endif %}
+      {% elif panel.entity_type == "automation" %}
+        <p><strong>Enabled:</strong> {{ panel.enabled }}</p>
+        <p><strong>Mode:</strong> {{ panel.mode }}</p>
+        {% if panel.latest_event %}
+        <p><strong>Latest decision:</strong> {{ panel.latest_event.decision }}</p>
+        <p><strong>Reason:</strong> {{ panel.latest_event.reason }}</p>
+        {% else %}
+        <p>No automation cycles recorded yet.</p>
+        {% endif %}
+      {% else %}
+        <p>Unknown panel target.</p>
+      {% endif %}
+    </section>
+    {% endfor %}
+  </div>
+</main>
+{% endblock %}
