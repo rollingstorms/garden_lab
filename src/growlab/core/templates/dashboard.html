@@ -1,51 +1,70 @@
 {% extends "base.html" %}
 {% block body %}
 <main class="dashboard-shell">
-  <section class="hero">
-    <div>
-      <p class="eyebrow">Garden Lab UI v1</p>
-      <h1>Equilibrium Console</h1>
-      <p class="hero-copy">
-        Manual control, typed config editing, live telemetry, and decision history for the garden lab.
-      </p>
-    </div>
-    <div class="hero-actions">
-      <button class="utility-button utility-button--secondary" id="refresh-button" type="button">Refresh</button>
-      <button class="utility-button" id="return-auto-button" type="button">Return All To Auto</button>
-      <button class="utility-button utility-button--danger" id="safe-shutdown-button" type="button">Safe Shutdown</button>
-    </div>
+  <section class="hero-shell">
+    <section class="hero">
+      <div class="hero-copy-wrap">
+        <p class="eyebrow">Garden Lab Control Surface</p>
+        <h1>Equilibrium Console</h1>
+        <p class="hero-copy">
+          Manual overrides, typed garden tuning, synced hover telemetry, and a safer live operations board for the lab.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button class="utility-button utility-button--secondary" id="refresh-button" type="button">Refresh</button>
+        <button class="utility-button" id="return-auto-button" type="button">Return All To Auto</button>
+        <button class="utility-button utility-button--danger" id="safe-shutdown-button" type="button">Safe Shutdown</button>
+      </div>
+    </section>
+
+    <section class="overview-panel">
+      <div class="overview-header">
+        <div>
+          <p class="panel-meta">System</p>
+          <h2>Live Overview</h2>
+        </div>
+      </div>
+      <div class="status-banner" id="emergency-banner" hidden></div>
+      <div class="overview-deck" id="overview-deck"></div>
+    </section>
   </section>
 
-  <section class="status-strip">
-    <div class="status-banner" id="emergency-banner" hidden></div>
+  <section class="sensor-panel panel-card">
+    <div class="panel-header">
+      <div>
+        <p class="panel-meta">Telemetry</p>
+        <h2>Sensor Deck</h2>
+      </div>
+    </div>
     <div class="sensor-strip" id="sensor-strip"></div>
   </section>
 
   <section class="dashboard-grid">
-    <div class="dashboard-column">
-      <section class="panel-card panel-card--wide">
+    <div class="dashboard-column dashboard-column--wide">
+      <section class="panel-card panel-card--control">
         <div class="panel-header">
           <div>
             <p class="panel-meta">Actuators</p>
-            <h2>Device Control</h2>
+            <h2>Device Control Cards</h2>
           </div>
         </div>
         <div class="device-grid" id="actuator-grid"></div>
       </section>
 
-      <section class="panel-card panel-card--wide">
+      <section class="panel-card panel-card--charts">
         <div class="panel-header">
           <div>
             <p class="panel-meta">History</p>
-            <h2>Sensor Trends</h2>
+            <h2>Trend Surface</h2>
           </div>
+          <div class="hover-readout" id="hover-readout">Hover a chart for exact values.</div>
         </div>
         <div class="chart-grid" id="chart-grid"></div>
       </section>
     </div>
 
     <div class="dashboard-column dashboard-column--narrow">
-      <section class="panel-card">
+      <section class="panel-card config-card">
         <div class="panel-header">
           <div>
             <p class="panel-meta">Config</p>
@@ -53,10 +72,11 @@
           </div>
           <button class="mode-toggle" data-target="climate-config">Advanced</button>
         </div>
+        <div class="config-card__summary" id="climate-summary"></div>
         <form class="config-form" id="climate-form"></form>
       </section>
 
-      <section class="panel-card">
+      <section class="panel-card config-card">
         <div class="panel-header">
           <div>
             <p class="panel-meta">Config</p>
@@ -64,10 +84,11 @@
           </div>
           <button class="mode-toggle" data-target="light-config">Advanced</button>
         </div>
+        <div class="config-card__summary" id="light-summary"></div>
         <form class="config-form" id="light-form"></form>
       </section>
 
-      <section class="panel-card">
+      <section class="panel-card config-card">
         <div class="panel-header">
           <div>
             <p class="panel-meta">Config</p>
@@ -75,10 +96,11 @@
           </div>
           <button class="mode-toggle" data-target="watering-config">Advanced</button>
         </div>
+        <div class="config-card__summary" id="watering-summary"></div>
         <form class="config-form" id="watering-form"></form>
       </section>
 
-      <section class="panel-card">
+      <section class="panel-card config-card">
         <div class="panel-header">
           <div>
             <p class="panel-meta">Config</p>
@@ -86,6 +108,7 @@
           </div>
           <button class="mode-toggle" data-target="emergency-config">Advanced</button>
         </div>
+        <div class="config-card__summary" id="emergency-summary"></div>
         <form class="config-form" id="emergency-form"></form>
       </section>
     </div>
