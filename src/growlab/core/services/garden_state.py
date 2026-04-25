@@ -35,6 +35,7 @@ class GardenStateService:
         return {
             "generated_at": (latest_decision.ts_utc.isoformat() if latest_decision else None),
             "automation_id": GARDEN_AUTOMATION_ID,
+            "timezone": registry.config.app.timezone,
             "decision": {
                 "reason": latest_decision.reason if latest_decision else None,
                 "decision": latest_decision.decision if latest_decision else None,

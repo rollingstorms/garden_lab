@@ -103,6 +103,7 @@ class ClimateDeviceConfig(BaseModel):
 
 
 class ClimateControlConfig(BaseModel):
+    enabled: bool = True
     fan: Optional[ClimateDeviceConfig] = None
     heat: Optional[ClimateDeviceConfig] = None
 
@@ -113,6 +114,7 @@ class TimeRangeConfig(BaseModel):
 
 
 class LightControlConfig(BaseModel):
+    enabled: bool = True
     actuator: str
     schedule: TimeRangeConfig
 
@@ -132,6 +134,7 @@ class SensorWateringConfig(BaseModel):
 
 
 class WateringControlConfig(BaseModel):
+    enabled: bool = True
     actuator: str
     mode: Literal["schedule", "sensor"]
     schedule: Optional[TimedWateringConfig] = None
@@ -144,6 +147,7 @@ class EmergencyActionsConfig(BaseModel):
 
 
 class EmergencyControlConfig(BaseModel):
+    enabled: bool = True
     when: ConditionGroupConfig
     actions: EmergencyActionsConfig
 

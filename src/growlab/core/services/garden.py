@@ -77,67 +77,82 @@ class GardenController:
 
         emergency_active = False
         if controller.emergency:
-            emergency_active = _evaluate_condition_group(
-                controller.emergency.when,
-                runtime=runtime,
-            )
-            diagnostics["modules"]["emergency"] = {"active": emergency_active}
-            if emergency_active:
-                self._merge_actions(
-                    proposals,
-                    controller.emergency.actions.on,
-                    reason="emergency_force_on",
-                    source="emergency",
-                    priority=100,
+            if not controller.emergency.enabled:
+                diagnostics["modules"]["emergency"] = {"enabled": False, "active": False}
+            else:
+                emergency_active = _evaluate_condition_group(
+                    controller.emergency.when,
+                    runtime=runtime,
                 )
-                self._merge_actions(
-                    proposals,
-                    controller.emergency.actions.off,
-                    reason="emergency_force_off",
-                    source="emergency",
-                    priority=100,
-                )
+                diagnostics["modules"]["emergency"] = {"enabled": True, "active": emergency_active}
+                if emergency_active:
+                    self._merge_actions(
+                        proposals,
+                        controller.emergency.actions.on,
+                        reason="emergency_force_on",
+                        source="emergency",
+                        priority=100,
+                    )
+                    self._merge_actions(
+                        proposals,
+                        controller.emergency.actions.off,
+                        reason="emergency_force_off",
+                        source="emergency",
+                        priority=100,
+                    )
 
         if controller.climate:
-            climate_commands, climate_diag = self._evaluate_climate(
-                climate=controller.climate,
-                runtime=runtime,
-            )
-            diagnostics["modules"]["climate"] = climate_diag
-            for command in climate_commands:
-                self._merge_command(proposals, command)
+            if not controller.climate.enabled:
+                diagnostics["modules"]["climate"] = {"enabled": False}
+            else:
+                climate_commands, climate_diag = self._evaluate_climate(
+                    climate=controller.climate,
+                    runtime=runtime,
+                )
+                climate_diag["enabled"] = True
+                diagnostics["modules"]["climate"] = climate_diag
+                for command in climate_commands:
+                    self._merge_command(proposals, command)
 
         if controller.light:
-            lights_on = _time_in_range(
-                now_local.time(),
-                start=_parse_clock(controller.light.schedule.start),
-                end=_parse_clock(controller.light.schedule.end),
-            )
-            diagnostics["modules"]["light"] = {
-                "lights_on": lights_on,
-                "local_time": now_local.isoformat(),
-            }
-            self._merge_command(
-                proposals,
-                ProposedCommand(
-                    actuator_id=controller.light.actuator,
-                    command={"power": lights_on},
-                    reason="light_schedule_active" if lights_on else "light_schedule_inactive",
-                    source="light",
-                    priority=20,
-                ),
-            )
+            if not controller.light.enabled:
+                diagnostics["modules"]["light"] = {"enabled": False}
+            else:
+                lights_on = _time_in_range(
+                    now_local.time(),
+                    start=_parse_clock(controller.light.schedule.start),
+                    end=_parse_clock(controller.light.schedule.end),
+                )
+                diagnostics["modules"]["light"] = {
+                    "enabled": True,
+                    "lights_on": lights_on,
+                    "local_time": now_local.isoformat(),
+                }
+                self._merge_command(
+                    proposals,
+                    ProposedCommand(
+                        actuator_id=controller.light.actuator,
+                        command={"power": lights_on},
+                        reason="light_schedule_active" if lights_on else "light_schedule_inactive",
+                        source="light",
+                        priority=20,
+                    ),
+                )
 
         if controller.watering:
-            watering_command, watering_diag = self._evaluate_watering(
-                automation=automation,
-                runtime=runtime,
-                now_utc=now_utc,
-                now_local=now_local,
-            )
-            diagnostics["modules"]["watering"] = watering_diag
-            if watering_command:
-                self._merge_command(proposals, watering_command)
+            if not controller.watering.enabled:
+                diagnostics["modules"]["watering"] = {"enabled": False}
+            else:
+                watering_command, watering_diag = self._evaluate_watering(
+                    automation=automation,
+                    runtime=runtime,
+                    now_utc=now_utc,
+                    now_local=now_local,
+                )
+                watering_diag["enabled"] = True
+                diagnostics["modules"]["watering"] = watering_diag
+                if watering_command:
+                    self._merge_command(proposals, watering_command)
 
         diagnostics["modules"]["manual_overrides"] = []
         for override in manual_overrides or []:

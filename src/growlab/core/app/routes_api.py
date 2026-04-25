@@ -16,6 +16,7 @@ from growlab.core.schemas.api import (
     ClimateConfigPatchPayload,
     CollectorHeartbeatPayload,
     EmergencyConfigPatchPayload,
+    GardenModuleEnabledPayload,
     LightingConfigPatchPayload,
     ManualOverridePayload,
     SensorIngestPayload,
@@ -251,6 +252,27 @@ def patch_emergency_config(
     try:
         translated = GardenSettingsTranslator().emergency_payload(payload.model_dump(exclude_none=True))
         result = ConfigService().update_garden_module(module="emergency", payload=translated, session=session)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return {"status": "ok", **result}
+
+
+@router.patch("/config/garden/{module}/enabled")
+def patch_garden_module_enabled(
+    module: str,
+    payload: GardenModuleEnabledPayload,
+    _: bool = Depends(require_write_access),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    if module not in {"climate", "light", "watering", "emergency"}:
+        raise HTTPException(status_code=404, detail=f"Unknown garden module: {module}")
+    try:
+        result = ConfigService().update_garden_module_enabled(
+            module=module,
+            enabled=payload.enabled,
+            session=session,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     session.commit()

@@ -82,3 +82,7 @@ class EmergencyConfigPatchPayload(BaseModel):
     pads_off: bool = True
     pump_off: bool = False
     advanced: Optional[dict[str, Any]] = None
+
+
+class GardenModuleEnabledPayload(BaseModel):
+    enabled: bool

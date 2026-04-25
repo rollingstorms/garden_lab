@@ -109,6 +109,10 @@
             </div>
             <span class="config-card__toggle-label">Open</span>
           </button>
+          <div class="config-power" data-config-power-group="climate">
+            <button class="config-power__button" data-config-power="climate" data-enabled="true" type="button">On</button>
+            <button class="config-power__button" data-config-power="climate" data-enabled="false" type="button">Off</button>
+          </div>
           <div class="config-card__summary" id="climate-summary"></div>
           <div class="config-card__editor" id="climate-editor" hidden>
             <div class="config-card__toolbar">
@@ -126,6 +130,10 @@
             </div>
             <span class="config-card__toggle-label">Open</span>
           </button>
+          <div class="config-power" data-config-power-group="light">
+            <button class="config-power__button" data-config-power="light" data-enabled="true" type="button">On</button>
+            <button class="config-power__button" data-config-power="light" data-enabled="false" type="button">Off</button>
+          </div>
           <div class="config-card__summary" id="light-summary"></div>
           <div class="config-card__editor" id="light-editor" hidden>
             <div class="config-card__toolbar">
@@ -143,6 +151,10 @@
             </div>
             <span class="config-card__toggle-label">Open</span>
           </button>
+          <div class="config-power" data-config-power-group="watering">
+            <button class="config-power__button" data-config-power="watering" data-enabled="true" type="button">On</button>
+            <button class="config-power__button" data-config-power="watering" data-enabled="false" type="button">Off</button>
+          </div>
           <div class="config-card__summary" id="watering-summary"></div>
           <div class="config-card__editor" id="watering-editor" hidden>
             <div class="config-card__toolbar">
@@ -160,6 +172,10 @@
             </div>
             <span class="config-card__toggle-label">Open</span>
           </button>
+          <div class="config-power" data-config-power-group="emergency">
+            <button class="config-power__button" data-config-power="emergency" data-enabled="true" type="button">On</button>
+            <button class="config-power__button" data-config-power="emergency" data-enabled="false" type="button">Off</button>
+          </div>
           <div class="config-card__summary" id="emergency-summary"></div>
           <div class="config-card__editor" id="emergency-editor" hidden>
             <div class="config-card__toolbar">
@@ -181,6 +197,17 @@
       </section>
     </section>
   </section>
+
+  <footer class="dashboard-footer">
+    <div class="dashboard-footer__meta" id="timezone-display">Timezone: America/New_York</div>
+    <div class="unit-switch" aria-label="Temperature units">
+      <span class="unit-switch__label">Temp Units</span>
+      <div class="unit-switch__buttons">
+        <button class="unit-switch__button" data-temp-unit="C" type="button">C</button>
+        <button class="unit-switch__button" data-temp-unit="F" type="button">F</button>
+      </div>
+    </div>
+  </footer>
 
   <div class="toast-stack" id="toast-stack"></div>
 </main>

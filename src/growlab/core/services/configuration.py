@@ -97,6 +97,58 @@ class ConfigService:
             "diff": _diff_dict(before_effective.get(module) or {}, after_effective.get(module) or {}),
         }
 
+    def update_garden_module_enabled(
+        self,
+        *,
+        module: str,
+        enabled: bool,
+        session,
+    ) -> dict[str, Any]:
+        base_path, local_path = get_config_paths()
+        base_data = load_yaml_file(base_path)
+        local_data = load_yaml_file(local_path)
+        before_effective = self.get_garden_config()["effective"]
+
+        local_mut = deepcopy(local_data)
+        controller = (
+            local_mut.setdefault("automations", {})
+            .setdefault(GARDEN_AUTOMATION_ID, {})
+            .setdefault("controller", {})
+        )
+        module_override = controller.setdefault(module, {})
+        module_override["enabled"] = enabled
+
+        merged = _deep_merge(base_data, local_mut)
+        validated = GrowLabConfig.model_validate(merged)
+        effective_controller = validated.automations[GARDEN_AUTOMATION_ID].controller
+        if effective_controller is None:
+            raise ValueError("Updated garden controller config is missing")
+
+        _write_yaml(local_path, local_mut)
+        reset_runtime_caches()
+
+        after_effective = effective_controller.model_dump(mode="json")
+        insert_system_event(
+            session,
+            category="config",
+            entity_id=module,
+            event_type="config_enabled_updated",
+            message=f"Set garden {module} enabled={enabled}",
+            payload={
+                "module": module,
+                "before": before_effective.get(module),
+                "after": after_effective.get(module),
+                "enabled": enabled,
+            },
+        )
+        return {
+            "module": module,
+            "enabled": enabled,
+            "effective": after_effective.get(module),
+            "override": controller[module],
+            "diff": _diff_dict(before_effective.get(module) or {}, after_effective.get(module) or {}),
+        }
+
 
 class GardenSettingsTranslator:
     def climate_payload(self, payload: dict[str, Any]) -> dict[str, Any]:

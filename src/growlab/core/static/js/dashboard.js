@@ -4,6 +4,7 @@ const state = {
   garden: null,
   activeSection: "control",
   openConfig: null,
+  temperatureUnit: window.localStorage.getItem("gardenLab.temperatureUnit") || "C",
   inspect: {
     chartId: null,
     index: null,
@@ -37,6 +38,7 @@ const els = {
   lightSummary: document.getElementById("light-summary"),
   wateringSummary: document.getElementById("watering-summary"),
   emergencySummary: document.getElementById("emergency-summary"),
+  timezoneDisplay: document.getElementById("timezone-display"),
   toastStack: document.getElementById("toast-stack"),
 };
 
@@ -73,7 +75,9 @@ function render() {
   renderConfigDiff();
   renderConfigSummaries();
   renderConfigAccordions();
+  renderConfigPowerStates();
   renderConfigForms();
+  renderFooter();
   updateChartReadout();
 }
 
@@ -108,6 +112,14 @@ function renderOverview() {
   ].join("");
 }
 
+function renderFooter() {
+  const timezone = state.garden?.timezone || "America/New_York";
+  els.timezoneDisplay.textContent = `Timezone: ${timezone}`;
+  document.querySelectorAll("[data-temp-unit]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.tempUnit === state.temperatureUnit);
+  });
+}
+
 function overviewCard(label, value, sub) {
   return `
     <article class="overview-card">
@@ -127,9 +139,9 @@ function renderSensors() {
       tiles.push(`
         <article class="sensor-tile">
           <div class="sensor-tile__label">${sensor.label}</div>
-          <div class="sensor-tile__value">${formatValue(metric.value)}</div>
-          <div class="sensor-tile__unit">${metric.label}${metric.unit ? ` • ${metric.unit}` : ""}</div>
-          <div class="sensor-tile__trend">${describeDelta(metric.value, previous)}</div>
+          <div class="sensor-tile__value">${formatMetricValue(metricId, metric.value)}</div>
+          <div class="sensor-tile__unit">${metric.label}${displayMetricUnit(metricId, metric.unit) ? ` • ${displayMetricUnit(metricId, metric.unit)}` : ""}</div>
+          <div class="sensor-tile__trend">${describeDelta(metricId, metric.value, previous)}</div>
         </article>
       `);
     }
@@ -211,6 +223,7 @@ function renderCharts() {
       defs.push({
         chartId,
         sensorLabel: sensor.label,
+        metricId,
         metricLabel: metric.label,
         unit: metric.unit,
         points,
@@ -223,8 +236,8 @@ function renderCharts() {
               <h3>${metric.label}</h3>
             </div>
             <div class="chart-card__stats">
-              <strong>${formatValue(metric.value)}${metric.unit ? ` ${metric.unit}` : ""}</strong>
-              ${min !== null && max !== null ? `${formatValue(min)} - ${formatValue(max)}` : "No range"}
+              <strong>${formatMetricValue(metricId, metric.value)}${displayMetricUnit(metricId, metric.unit) ? ` ${displayMetricUnit(metricId, metric.unit)}` : ""}</strong>
+              ${min !== null && max !== null ? `${formatMetricValue(metricId, min)} - ${formatMetricValue(metricId, max)}` : "No range"}
             </div>
           </div>
           <canvas id="${chartId}" width="420" height="180"></canvas>
@@ -381,8 +394,8 @@ function drawSeries(canvas, def) {
 
   context.fillStyle = "#92b09d";
   context.font = "10px sans-serif";
-  context.fillText(formatCompact(max), 6, padding.top + 8);
-  context.fillText(formatCompact(min), 6, padding.top + chartHeight);
+  context.fillText(formatMetricCompact(def.metricId, max), 6, padding.top + 8);
+  context.fillText(formatMetricCompact(def.metricId, min), 6, padding.top + chartHeight);
   const start = formatShortTime(points[0].ts_utc);
   const end = formatShortTime(points[points.length - 1].ts_utc);
   context.fillText(start, padding.left, height - 5);
@@ -412,7 +425,7 @@ function drawSeries(canvas, def) {
       y: padding.top + 4,
       width,
       paddingRight: padding.right,
-      valueText: `${def.metricLabel}: ${formatValue(hoverPoint.value)}${def.unit ? ` ${def.unit}` : ""}`,
+      valueText: `${def.metricLabel}: ${formatMetricValue(def.metricId, hoverPoint.value)}${displayMetricUnit(def.metricId, def.unit) ? ` ${displayMetricUnit(def.metricId, def.unit)}` : ""}`,
       timeText: formatTime(hoverPoint.ts_utc),
     });
   }
@@ -464,7 +477,7 @@ function updateChartReadout() {
     return;
   }
   const point = def.points[Math.max(0, Math.min(def.points.length - 1, state.inspect.index))];
-  els.chartReadout.textContent = `${def.sensorLabel} • ${def.metricLabel}: ${formatValue(point.value)}${def.unit ? ` ${def.unit}` : ""} • ${formatTime(point.ts_utc)}`;
+  els.chartReadout.textContent = `${def.sensorLabel} • ${def.metricLabel}: ${formatMetricValue(def.metricId, point.value)}${displayMetricUnit(def.metricId, def.unit) ? ` ${displayMetricUnit(def.metricId, def.unit)}` : ""} • ${formatTime(point.ts_utc)}`;
 }
 
 function clearInspect() {
@@ -513,30 +526,35 @@ function renderConfigSummaries() {
   const emergency = state.garden.config.effective.emergency;
 
   els.climateSummary.innerHTML = [
-    chip("Fan temp", `${climate.fan?.bands?.find((band) => band.metric === "temperature_c")?.off_below ?? "-"} to ${climate.fan?.bands?.find((band) => band.metric === "temperature_c")?.on_above ?? "-"}`),
+    chip("State", climate.enabled === false ? "Off" : "On"),
+    chip("Fan temp", `${formatMetricValue("temperature_c", climate.fan?.bands?.find((band) => band.metric === "temperature_c")?.off_below)} to ${formatMetricValue("temperature_c", climate.fan?.bands?.find((band) => band.metric === "temperature_c")?.on_above)}`),
     chip("Humidity", `${climate.fan?.bands?.find((band) => band.metric === "humidity_pct")?.off_below ?? "-"} to ${climate.fan?.bands?.find((band) => band.metric === "humidity_pct")?.on_above ?? "-"}`),
-    chip("Heat", `${climate.heat?.bands?.[0]?.on_below ?? "-"} to ${climate.heat?.bands?.[0]?.off_above ?? "-"}`),
+    chip("Heat", `${formatMetricValue("temperature_c", climate.heat?.bands?.[0]?.on_below)} to ${formatMetricValue("temperature_c", climate.heat?.bands?.[0]?.off_above)}`),
   ].join("");
 
   els.lightSummary.innerHTML = [
+    chip("State", light.enabled === false ? "Off" : "On"),
     chip("Window", `${light.schedule.start} to ${light.schedule.end}`),
     chip("Actuator", labelizeActuator(light.actuator)),
   ].join("");
 
   els.wateringSummary.innerHTML = watering.mode === "schedule"
     ? [
+        chip("State", watering.enabled === false ? "Off" : "On"),
         chip("Mode", "Timed"),
         chip("Interval", `${watering.schedule.interval_minutes} min`),
         chip("Run", `${watering.schedule.run_seconds}s`),
       ].join("")
     : [
+        chip("State", watering.enabled === false ? "Off" : "On"),
         chip("Mode", "Sensor"),
         chip("Start below", `${watering.sensor.start_below}%`),
         chip("Stop above", `${watering.sensor.stop_above}%`),
       ].join("");
 
   els.emergencySummary.innerHTML = [
-    chip("High temp", `${emergency.when.any?.find((item) => item.metric === "temperature_c")?.value ?? "-"} C`),
+    chip("State", emergency.enabled === false ? "Off" : "On"),
+    chip("High temp", `${formatMetricValue("temperature_c", emergency.when.any?.find((item) => item.metric === "temperature_c")?.value)} ${displayMetricUnit("temperature_c", "C")}`),
     chip("High humidity", `${emergency.when.any?.find((item) => item.metric === "humidity_pct")?.value ?? "-"} %`),
     chip("Actions", `${emergency.actions.on.length + emergency.actions.off.length} enforced`),
   ].join("");
@@ -552,6 +570,19 @@ function renderConfigAccordions() {
     if (editor) editor.hidden = !open;
     const label = card.querySelector(".config-card__toggle-label");
     if (label) label.textContent = open ? "Close" : "Open";
+  });
+}
+
+function renderConfigPowerStates() {
+  const modules = state.garden.config.effective || {};
+  document.querySelectorAll("[data-config-power-group]").forEach((group) => {
+    const module = group.dataset.configPowerGroup;
+    const enabled = modules[module]?.enabled !== false;
+    group.querySelectorAll("[data-config-power]").forEach((button) => {
+      button.classList.toggle("is-active", String(enabled) === button.dataset.enabled);
+    });
+    const card = group.closest("[data-config-card]");
+    if (card) card.classList.toggle("is-disabled", !enabled);
   });
 }
 
@@ -743,22 +774,60 @@ function formatCompact(value) {
 
 function formatTime(value) {
   if (!value) return "";
-  return new Date(value).toLocaleString();
+  return new Date(value).toLocaleString([], {
+    timeZone: state.garden?.timezone || "America/New_York",
+  });
 }
 
 function formatShortTime(value) {
   if (!value) return "";
-  return new Date(value).toLocaleTimeString();
+  return new Date(value).toLocaleTimeString([], {
+    timeZone: state.garden?.timezone || "America/New_York",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
-function describeDelta(current, previous) {
+function describeDelta(metricId, current, previous) {
   if (current === null || current === undefined || previous === null || previous === undefined) return "Latest reading";
   const currentNum = Number(current);
   const previousNum = Number(previous);
   if (Number.isNaN(currentNum) || Number.isNaN(previousNum)) return "Latest reading";
-  const delta = currentNum - previousNum;
+  const delta = convertMetricValue(metricId, currentNum) - convertMetricValue(metricId, previousNum);
   const sign = delta > 0 ? "+" : "";
   return `${sign}${delta.toFixed(1)} from previous sample`;
+}
+
+function isTemperatureMetric(metricId, unit = "") {
+  return String(metricId).toLowerCase().includes("temperature") || String(unit).toUpperCase() === "C";
+}
+
+function convertTemperature(value) {
+  if (value === null || value === undefined || value === "" || Number.isNaN(Number(value))) return value;
+  if (state.temperatureUnit === "F") return (Number(value) * 9) / 5 + 32;
+  return Number(value);
+}
+
+function convertMetricValue(metricId, value, unit = "") {
+  if (isTemperatureMetric(metricId, unit)) return convertTemperature(value);
+  return Number(value);
+}
+
+function formatMetricValue(metricId, value, unit = "") {
+  if (value === null || value === undefined || value === "") return "No data";
+  if (Number.isNaN(Number(value))) return String(value);
+  const converted = convertMetricValue(metricId, value, unit);
+  return Number.isInteger(converted) ? String(converted) : converted.toFixed(1);
+}
+
+function formatMetricCompact(metricId, value, unit = "") {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+  return convertMetricValue(metricId, value, unit).toFixed(1);
+}
+
+function displayMetricUnit(metricId, unit = "") {
+  if (isTemperatureMetric(metricId, unit)) return state.temperatureUnit;
+  return unit || "";
 }
 
 function humanizeReason(value) {
@@ -846,6 +915,23 @@ async function handleConfigSubmit(event) {
   }
 }
 
+async function handleConfigPower(event) {
+  const button = event.target.closest("[data-config-power]");
+  if (!button) return;
+  const module = button.dataset.configPower;
+  const enabled = button.dataset.enabled === "true";
+  try {
+    await fetchJson(`/api/config/garden/${module}/enabled`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    });
+    showToast(`${labelizeActuator(module)} ${enabled ? "enabled" : "disabled"}.`);
+    await loadGardenState();
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 function showToast(message, isError = false) {
   const toast = document.createElement("div");
   toast.className = "toast";
@@ -910,10 +996,18 @@ function bindUtilityActions() {
       showToast(error.message, true);
     }
   });
+  document.querySelectorAll("[data-temp-unit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.temperatureUnit = button.dataset.tempUnit;
+      window.localStorage.setItem("gardenLab.temperatureUnit", state.temperatureUnit);
+      render();
+    });
+  });
 }
 
 function bindEvents() {
   els.actuatorGrid.addEventListener("click", handleActuatorAction);
+  document.querySelector(".config-stack").addEventListener("click", handleConfigPower);
   [els.climateForm, els.lightForm, els.wateringForm, els.emergencyForm].forEach((form) => {
     form.addEventListener("submit", handleConfigSubmit);
   });

@@ -57,6 +57,60 @@ button {
   padding: 0.75rem 0.75rem 2.2rem;
 }
 
+.dashboard-footer {
+  display: grid;
+  gap: 0.8rem;
+  align-items: center;
+  margin-top: 1rem;
+  padding: 0.9rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(14, 24, 22, 0.96), rgba(8, 16, 14, 0.98));
+  box-shadow: var(--shadow-soft);
+}
+
+.dashboard-footer__meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.unit-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.unit-switch__label {
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.unit-switch__buttons {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.unit-switch__button {
+  min-width: 52px;
+  min-height: 42px;
+  padding: 0.62rem 0.78rem;
+  border-radius: 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(172, 229, 197, 0.1);
+  font-weight: 700;
+}
+
+.unit-switch__button.is-active {
+  color: #07110c;
+  background: linear-gradient(135deg, var(--temp), #ffd2a8);
+  box-shadow: 0 10px 20px rgba(255, 154, 104, 0.2);
+}
+
 .top-shell,
 .dashboard-sections,
 .history-panels,
@@ -547,6 +601,10 @@ button {
     linear-gradient(180deg, rgba(18, 35, 31, 0.97), rgba(11, 22, 20, 0.98));
 }
 
+.config-card.is-disabled {
+  opacity: 0.7;
+}
+
 .config-card__header-button {
   display: flex;
   align-items: flex-start;
@@ -578,6 +636,36 @@ button {
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.85rem;
+}
+
+.config-power {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  width: 100%;
+  margin-top: 0.8rem;
+}
+
+.config-power__button {
+  min-height: 44px;
+  padding: 0.68rem 0.8rem;
+  border-radius: 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(172, 229, 197, 0.1);
+  font-weight: 700;
+}
+
+.config-power__button.is-active[data-enabled="true"] {
+  color: #07110c;
+  background: linear-gradient(135deg, var(--accent), #c7ffdb);
+  box-shadow: 0 10px 20px rgba(47, 203, 128, 0.18);
+}
+
+.config-power__button.is-active[data-enabled="false"] {
+  color: #fff7f8;
+  background: linear-gradient(135deg, #824550, #c95f70);
+  box-shadow: 0 10px 20px rgba(201, 95, 112, 0.16);
 }
 
 .config-chip {
@@ -745,6 +833,10 @@ button {
   .toast-stack {
     left: auto;
     width: 320px;
+  }
+
+  .dashboard-footer {
+    grid-template-columns: 1fr auto;
   }
 }
 

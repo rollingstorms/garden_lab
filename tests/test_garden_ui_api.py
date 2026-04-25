@@ -170,3 +170,25 @@ def test_return_to_auto_clears_all_overrides(tmp_path: Path, monkeypatch) -> Non
     assert response.status_code == 200
     assert response.json()["actuators"]["exhaust_fan"]["override"] is None
     assert response.json()["actuators"]["lamps"]["override"] is None
+
+
+def test_module_enabled_toggle_persists_and_disables_commands(tmp_path: Path, monkeypatch) -> None:
+    client, local_path = build_client(tmp_path, monkeypatch)
+
+    response = client.patch("/api/config/garden/light/enabled", json={"enabled": False})
+    assert response.status_code == 200
+    assert response.json()["effective"]["enabled"] is False
+
+    local_data = yaml.safe_load(local_path.read_text(encoding="utf-8"))
+    assert local_data["automations"]["garden_equilibrium"]["controller"]["light"]["enabled"] is False
+
+    response = client.post("/api/automations/run")
+    assert response.status_code == 200
+
+    response = client.get("/api/garden/config")
+    assert response.status_code == 200
+    assert response.json()["effective"]["light"]["enabled"] is False
+
+    response = client.get("/api/garden/state")
+    assert response.status_code == 200
+    assert response.json()["actuators"]["lamps"]["power"] is None
