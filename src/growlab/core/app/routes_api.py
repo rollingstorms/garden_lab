@@ -8,6 +8,7 @@ from growlab.core.app.dependencies import get_db_session, get_registry
 from growlab.core.config.registry import EntityRegistry
 from growlab.core.db.repo_events import get_latest_actuator_event, get_latest_automation_event
 from growlab.core.db.repo_readings import get_latest_sensor_metrics, get_sensor_history
+from growlab.core.drivers.registry import load_actuator_driver
 from growlab.core.schemas.api import (
     ActuatorCommandPayload,
     CollectorHeartbeatPayload,
@@ -129,10 +130,15 @@ def actuator_state(
 ) -> dict:
     actuator = registry.get_actuator(actuator_id)
     latest_event = get_latest_actuator_event(session, actuator_id=actuator_id)
+    driver = load_actuator_driver(registry.config, actuator.driver)
+    driver.setup(actuator.config)
+    live_state = driver.get_state()
     return {
         "actuator_id": actuator_id,
         "driver": actuator.driver,
-        "state": latest_event.payload_json.get("command", {}) if latest_event else {},
+        "state": live_state.get("state", {}),
+        "driver_state": live_state,
+        "last_command": latest_event.payload_json.get("command", {}) if latest_event else {},
         "latest_event": {
             "event_type": latest_event.event_type,
             "status": latest_event.status,

@@ -26,6 +26,19 @@
 
 The core app serves the dashboard and API, runs the automation loop, and records commands and events. The collector runs as a separate long-lived process that polls Pi-attached sensors and posts normalized readings back to core.
 
+## Kauf Smart Plugs
+
+The default actuator setup now expects four Kauf plugs reachable on the LAN through the ESPHome native API:
+
+- `exhaust_fan`
+- `water_pump`
+- `warm_pads`
+- `lamps`
+
+Set `KAUF_FAN_HOST`, `KAUF_PUMP_HOST`, `KAUF_PADS_HOST`, and `KAUF_LAMPS_HOST` in `.env` to the plugs' hostnames or IPs. If your Tasmota setup uses HTTP auth or non-default relay naming, add those overrides in `config/local.yaml` under each actuator's `config`.
+The Kauf plugs currently advertising on the LAN expose the primary relay as ESPHome switch object id `kauf_plug`, which is the default actuator target in `config/base.yaml`.
+Discovered hostnames on the current LAN are `kauf-plug-f1e4e6.local`, `kauf-plug-f1d123.local`, `kauf-plug-f1d12a.local`, and `kauf-plug-f1d1f5.local`; map those to fan/pump/pads/lamps however you physically assign them.
+
 ## Pi Deploy
 
 1. Clone the repo onto the Pi at `/home/pi/garden_lab`

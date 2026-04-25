@@ -15,7 +15,8 @@ drivers:
     i2c_sht40: growlab.collector.drivers.sensor.i2c_sht40:SHT40Driver
     i2c_tsl2591: growlab.collector.drivers.sensor.i2c_tsl2591:TSL2591Driver
   actuator:
-    tuya_outlet: growlab.core.drivers.actuator.tuya_outlet:TuyaOutletDriver
+    esphome_switch: growlab.core.drivers.actuator.esphome_switch:ESPHomeSwitchDriver
+    tasmota_switch: growlab.core.drivers.actuator.tasmota_switch:TasmotaSwitchDriver
 
 sensors:
   air_lab:
@@ -78,52 +79,44 @@ sensors:
 actuators:
   exhaust_fan:
     label: Exhaust Fan
-    driver: tuya_outlet
+    driver: esphome_switch
     enabled: true
     config:
-      device_id: env:TUYA_FAN_DEVICE_ID
-      ip: 192.168.68.112
-      local_key: env:TUYA_FAN_LOCAL_KEY
-      version: 3.5
+      host: env:KAUF_FAN_HOST
+      switch_object_id: kauf_plug
     commands:
       power:
         type: bool
 
   water_pump:
     label: Water Pump
-    driver: tuya_outlet
+    driver: esphome_switch
     enabled: true
     config:
-      device_id: env:TUYA_PUMP_DEVICE_ID
-      ip: 192.168.68.103
-      local_key: env:TUYA_PUMP_LOCAL_KEY
-      version: 3.5
+      host: env:KAUF_PUMP_HOST
+      switch_object_id: kauf_plug
     commands:
       power:
         type: bool
 
   warm_pads:
     label: Warm Pads
-    driver: tuya_outlet
+    driver: esphome_switch
     enabled: true
     config:
-      device_id: env:TUYA_PADS_DEVICE_ID
-      ip: 192.168.68.104
-      local_key: env:TUYA_PADS_LOCAL_KEY
-      version: 3.5
+      host: env:KAUF_PADS_HOST
+      switch_object_id: kauf_plug
     commands:
       power:
         type: bool
 
   lamps:
     label: Lamps
-    driver: tuya_outlet
-    enabled: false  # not visible on LAN yet; set ip and enable once discovered
+    driver: esphome_switch
+    enabled: true
     config:
-      device_id: env:TUYA_LAMPS_DEVICE_ID
-      ip: env:TUYA_LAMPS_IP
-      local_key: env:TUYA_LAMPS_LOCAL_KEY
-      version: 3.5
+      host: env:KAUF_LAMPS_HOST
+      switch_object_id: kauf_plug
     commands:
       power:
         type: bool
