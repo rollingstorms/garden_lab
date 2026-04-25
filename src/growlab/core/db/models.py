@@ -57,3 +57,31 @@ class AutomationEvent(Base):
     decision: Mapped[str] = mapped_column(String(64))
     reason: Mapped[str] = mapped_column(String(255))
     payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class ManualOverride(Base):
+    __tablename__ = "manual_overrides"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    actuator_id: Mapped[str] = mapped_column(String(120), index=True)
+    mode: Mapped[str] = mapped_column(String(32), index=True)
+    pulse_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    source: Mapped[str] = mapped_column(String(64), default="dashboard")
+    status: Mapped[str] = mapped_column(String(32), index=True, default="active")
+    expires_at_utc: Mapped[DateTime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at_utc: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at_utc: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class SystemEvent(Base):
+    __tablename__ = "system_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    category: Mapped[str] = mapped_column(String(64), index=True)
+    entity_id: Mapped[Optional[str]] = mapped_column(String(120), index=True, nullable=True)
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(64), default="ok")
+    message: Mapped[str] = mapped_column(String(255))
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    ts_utc: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)

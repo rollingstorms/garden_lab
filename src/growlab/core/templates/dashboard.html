@@ -1,82 +1,130 @@
 {% extends "base.html" %}
 {% block body %}
-<main>
-  <h1>{{ title }}</h1>
-  <div class="panel-grid">
-    {% for panel in panels %}
-    <section class="panel-card">
-      <div class="panel-meta">{{ panel.panel }}</div>
-      <h2>{{ panel.label }}</h2>
+<main class="dashboard-shell">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Garden Lab UI v1</p>
+      <h1>Equilibrium Console</h1>
+      <p class="hero-copy">
+        Manual control, typed config editing, live telemetry, and decision history for the garden lab.
+      </p>
+    </div>
+    <div class="hero-actions">
+      <button class="utility-button utility-button--secondary" id="refresh-button" type="button">Refresh</button>
+      <button class="utility-button" id="return-auto-button" type="button">Return All To Auto</button>
+      <button class="utility-button utility-button--danger" id="safe-shutdown-button" type="button">Safe Shutdown</button>
+    </div>
+  </section>
 
-      {% if panel.entity_type == "sensor" %}
-        <div class="metric-list">
-          {% for metric_id, metric in panel.metrics.items() %}
-          <div class="metric-row">
-            <span class="metric-label">{{ metric.label }}</span>
-            <span class="metric-value">
-              {% if panel.latest.get(metric_id) is not none %}
-                {{ panel.latest.get(metric_id) }}{% if metric.unit %} {{ metric.unit }}{% endif %}
-              {% else %}
-                No data
-              {% endif %}
-            </span>
+  <section class="status-strip">
+    <div class="status-banner" id="emergency-banner" hidden></div>
+    <div class="sensor-strip" id="sensor-strip"></div>
+  </section>
+
+  <section class="dashboard-grid">
+    <div class="dashboard-column">
+      <section class="panel-card panel-card--wide">
+        <div class="panel-header">
+          <div>
+            <p class="panel-meta">Actuators</p>
+            <h2>Device Control</h2>
           </div>
-          {% endfor %}
         </div>
+        <div class="device-grid" id="actuator-grid"></div>
+      </section>
 
-        <div class="history-block">
-          {% for metric_id, points in panel.history.items() %}
-          <h3>{{ panel.metrics[metric_id].label }}</h3>
-          {% if points %}
-          <table>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for point in points[-5:] %}
-              <tr>
-                <td>{{ point.ts_utc }}</td>
-                <td>
-                  {% if point.value_num is not none %}
-                    {{ point.value_num }}
-                  {% else %}
-                    {{ point.value_text }}
-                  {% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-          {% else %}
-          <p>No history yet.</p>
-          {% endif %}
-          {% endfor %}
+      <section class="panel-card panel-card--wide">
+        <div class="panel-header">
+          <div>
+            <p class="panel-meta">History</p>
+            <h2>Sensor Trends</h2>
+          </div>
         </div>
-      {% elif panel.entity_type == "actuator" %}
-        <p><strong>Driver:</strong> {{ panel.driver }}</p>
-        {% if panel.latest_event %}
-        <p><strong>Latest event:</strong> {{ panel.latest_event.event_type }} / {{ panel.latest_event.status }}</p>
-        <pre>{{ panel.latest_event.payload_json }}</pre>
-        {% else %}
-        <p>No commands recorded yet.</p>
-        {% endif %}
-      {% elif panel.entity_type == "automation" %}
-        <p><strong>Enabled:</strong> {{ panel.enabled }}</p>
-        <p><strong>Mode:</strong> {{ panel.mode }}</p>
-        {% if panel.latest_event %}
-        <p><strong>Latest decision:</strong> {{ panel.latest_event.decision }}</p>
-        <p><strong>Reason:</strong> {{ panel.latest_event.reason }}</p>
-        {% else %}
-        <p>No automation cycles recorded yet.</p>
-        {% endif %}
-      {% else %}
-        <p>Unknown panel target.</p>
-      {% endif %}
+        <div class="chart-grid" id="chart-grid"></div>
+      </section>
+    </div>
+
+    <div class="dashboard-column dashboard-column--narrow">
+      <section class="panel-card">
+        <div class="panel-header">
+          <div>
+            <p class="panel-meta">Config</p>
+            <h2>Climate</h2>
+          </div>
+          <button class="mode-toggle" data-target="climate-config">Advanced</button>
+        </div>
+        <form class="config-form" id="climate-form"></form>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div>
+            <p class="panel-meta">Config</p>
+            <h2>Lighting</h2>
+          </div>
+          <button class="mode-toggle" data-target="light-config">Advanced</button>
+        </div>
+        <form class="config-form" id="light-form"></form>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div>
+            <p class="panel-meta">Config</p>
+            <h2>Watering</h2>
+          </div>
+          <button class="mode-toggle" data-target="watering-config">Advanced</button>
+        </div>
+        <form class="config-form" id="watering-form"></form>
+      </section>
+
+      <section class="panel-card">
+        <div class="panel-header">
+          <div>
+            <p class="panel-meta">Config</p>
+            <h2>Emergency</h2>
+          </div>
+          <button class="mode-toggle" data-target="emergency-config">Advanced</button>
+        </div>
+        <form class="config-form" id="emergency-form"></form>
+      </section>
+    </div>
+  </section>
+
+  <section class="history-panels">
+    <section class="panel-card">
+      <div class="panel-header">
+        <div>
+          <p class="panel-meta">Decisions</p>
+          <h2>Decision Timeline</h2>
+        </div>
+      </div>
+      <div class="timeline-list" id="decision-timeline"></div>
     </section>
-    {% endfor %}
-  </div>
+
+    <section class="panel-card">
+      <div class="panel-header">
+        <div>
+          <p class="panel-meta">Overrides</p>
+          <h2>Manual Override History</h2>
+        </div>
+      </div>
+      <div class="timeline-list" id="override-timeline"></div>
+    </section>
+
+    <section class="panel-card">
+      <div class="panel-header">
+        <div>
+          <p class="panel-meta">Config</p>
+          <h2>Config Diff</h2>
+        </div>
+      </div>
+      <pre class="json-block" id="config-diff"></pre>
+    </section>
+  </section>
+
+  <div class="toast-stack" id="toast-stack"></div>
 </main>
+
+<script type="module" src="/static/js/dashboard.js"></script>
 {% endblock %}

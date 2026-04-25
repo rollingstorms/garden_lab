@@ -26,6 +26,18 @@
 
 The core app serves the dashboard and API, runs the automation loop, and records commands and events. The collector runs as a separate long-lived process that polls Pi-attached sensors and posts normalized readings back to core.
 
+## Main Garden Algorithm
+
+The default control loop now treats the lab like a small equilibrium system instead of a single threshold toggle.
+
+- `garden_equilibrium` is the main automation in `config/base.yaml`
+- climate control is modular: fan cooling and pad heating each use their own hysteresis bands
+- lamps run on a daily schedule
+- watering can run either on a timed pulse schedule or from a soil-moisture threshold
+- emergency logic overrides everything else and forces the safe state: fan on, lamps off, pads off
+
+If you want to switch watering from timed to sensor-driven control, keep the same `watering.actuator` and change `watering.mode` from `schedule` to `sensor`, then provide the soil sensor and thresholds under `watering.sensor`.
+
 ## Kauf Smart Plugs
 
 The default actuator setup now expects four Kauf plugs reachable on the LAN through the ESPHome native API:

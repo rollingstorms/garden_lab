@@ -88,11 +88,79 @@ class AutomationActionsConfig(BaseModel):
     off: list[ActionConfig] = Field(default_factory=list)
 
 
+class EnvironmentBandConfig(BaseModel):
+    sensor: str
+    metric: str
+    on_above: Optional[float] = None
+    off_below: Optional[float] = None
+    on_below: Optional[float] = None
+    off_above: Optional[float] = None
+
+
+class ClimateDeviceConfig(BaseModel):
+    actuator: str
+    bands: list[EnvironmentBandConfig] = Field(default_factory=list)
+
+
+class ClimateControlConfig(BaseModel):
+    fan: Optional[ClimateDeviceConfig] = None
+    heat: Optional[ClimateDeviceConfig] = None
+
+
+class TimeRangeConfig(BaseModel):
+    start: str
+    end: str
+
+
+class LightControlConfig(BaseModel):
+    actuator: str
+    schedule: TimeRangeConfig
+
+
+class TimedWateringConfig(BaseModel):
+    interval_minutes: int = Field(gt=0)
+    run_seconds: int = Field(gt=0)
+    anchor: str = "00:00"
+
+
+class SensorWateringConfig(BaseModel):
+    sensor: str
+    metric: str
+    start_below: float
+    stop_above: Optional[float] = None
+    max_run_seconds: Optional[int] = Field(default=None, gt=0)
+
+
+class WateringControlConfig(BaseModel):
+    actuator: str
+    mode: Literal["schedule", "sensor"]
+    schedule: Optional[TimedWateringConfig] = None
+    sensor: Optional[SensorWateringConfig] = None
+
+
+class EmergencyActionsConfig(BaseModel):
+    on: list[ActionConfig] = Field(default_factory=list)
+    off: list[ActionConfig] = Field(default_factory=list)
+
+
+class EmergencyControlConfig(BaseModel):
+    when: ConditionGroupConfig
+    actions: EmergencyActionsConfig
+
+
+class GardenControllerConfig(BaseModel):
+    climate: Optional[ClimateControlConfig] = None
+    light: Optional[LightControlConfig] = None
+    watering: Optional[WateringControlConfig] = None
+    emergency: Optional[EmergencyControlConfig] = None
+
+
 class AutomationConfig(BaseModel):
     enabled: bool = True
     mode: str = "stateful"
-    logic: AutomationLogicConfig
-    actions: AutomationActionsConfig
+    logic: Optional[AutomationLogicConfig] = None
+    actions: Optional[AutomationActionsConfig] = None
+    controller: Optional[GardenControllerConfig] = None
     cooldown_seconds: Optional[int] = None
 
 

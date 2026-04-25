@@ -122,34 +122,64 @@ actuators:
         type: bool
 
 automations:
-  fan_temp_control:
+  garden_equilibrium:
     enabled: true
-    mode: stateful
-    logic:
-      "on":
-        all:
-          - sensor: air_lab
-            metric: temperature_c
-            op: ">="
-            value: 28.0
-            for_seconds: 180
-      "off":
-        any:
-          - sensor: air_lab
-            metric: temperature_c
-            op: "<="
-            value: 25.5
-            for_seconds: 180
-    actions:
-      "on":
-        - actuator: exhaust_fan
-          command:
-            power: true
-      "off":
-        - actuator: exhaust_fan
-          command:
-            power: false
-    cooldown_seconds: 120
+    mode: garden_v1
+    controller:
+      climate:
+        fan:
+          actuator: exhaust_fan
+          bands:
+            - sensor: air_lab
+              metric: temperature_c
+              on_above: 28.0
+              off_below: 25.5
+            - sensor: air_lab
+              metric: humidity_pct
+              on_above: 78.0
+              off_below: 68.0
+        heat:
+          actuator: warm_pads
+          bands:
+            - sensor: air_lab
+              metric: temperature_c
+              on_below: 20.0
+              off_above: 22.0
+      light:
+        actuator: lamps
+        schedule:
+          start: "06:00"
+          end: "22:00"
+      watering:
+        actuator: water_pump
+        mode: schedule
+        schedule:
+          interval_minutes: 720
+          run_seconds: 90
+          anchor: "06:00"
+      emergency:
+        when:
+          any:
+            - sensor: air_lab
+              metric: temperature_c
+              op: ">="
+              value: 34.0
+            - sensor: air_lab
+              metric: humidity_pct
+              op: ">="
+              value: 90.0
+        actions:
+          "on":
+            - actuator: exhaust_fan
+              command:
+                power: true
+          "off":
+            - actuator: warm_pads
+              command:
+                power: false
+            - actuator: lamps
+              command:
+                power: false
 
 dashboards:
   main:
@@ -170,4 +200,4 @@ dashboards:
       - panel: actuator_card
         entity: lamps
       - panel: automation_card
-        entity: fan_temp_control
+        entity: garden_equilibrium

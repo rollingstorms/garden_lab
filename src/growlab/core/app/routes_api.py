@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,14 +13,30 @@ from growlab.core.db.repo_readings import get_latest_sensor_metrics, get_sensor_
 from growlab.core.drivers.registry import load_actuator_driver
 from growlab.core.schemas.api import (
     ActuatorCommandPayload,
+    ClimateConfigPatchPayload,
     CollectorHeartbeatPayload,
+    EmergencyConfigPatchPayload,
+    LightingConfigPatchPayload,
+    ManualOverridePayload,
     SensorIngestPayload,
+    WateringConfigPatchPayload,
 )
 from growlab.core.services.commands import CommandService
+from growlab.core.services.configuration import ConfigService, GardenSettingsTranslator
 from growlab.core.services.ingestion import IngestionService
 from growlab.core.services.automation import AutomationService
+from growlab.core.services.garden_state import GardenStateService
+from growlab.core.services.overrides import ManualOverrideService
 
 router = APIRouter(prefix="/api")
+
+
+def require_write_access() -> bool:
+    token = os.environ.get("GARDEN_LAB_WRITE_TOKEN")
+    if token:
+        # Placeholder dependency so a real gate can be added without moving route logic.
+        return True
+    return True
 
 
 @router.get("/health")
@@ -166,6 +184,160 @@ def actuator_command(
     return result
 
 
+@router.get("/garden/state")
+def garden_state(
+    registry: EntityRegistry = Depends(get_registry),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    return GardenStateService().snapshot(registry=registry, session=session)
+
+
+@router.get("/garden/config")
+def garden_config(session: Session = Depends(get_db_session)) -> dict:
+    return ConfigService().get_garden_config()
+
+
+@router.patch("/config/garden/climate")
+def patch_climate_config(
+    payload: ClimateConfigPatchPayload,
+    _: bool = Depends(require_write_access),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    try:
+        translated = GardenSettingsTranslator().climate_payload(payload.model_dump(exclude_none=True))
+        result = ConfigService().update_garden_module(module="climate", payload=translated, session=session)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return {"status": "ok", **result}
+
+
+@router.patch("/config/garden/lighting")
+def patch_lighting_config(
+    payload: LightingConfigPatchPayload,
+    _: bool = Depends(require_write_access),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    try:
+        translated = GardenSettingsTranslator().lighting_payload(payload.model_dump(exclude_none=True))
+        result = ConfigService().update_garden_module(module="light", payload=translated, session=session)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return {"status": "ok", **result}
+
+
+@router.patch("/config/garden/watering")
+def patch_watering_config(
+    payload: WateringConfigPatchPayload,
+    _: bool = Depends(require_write_access),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    try:
+        translated = GardenSettingsTranslator().watering_payload(payload.model_dump(exclude_none=True))
+        result = ConfigService().update_garden_module(module="watering", payload=translated, session=session)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return {"status": "ok", **result}
+
+
+@router.patch("/config/garden/emergency")
+def patch_emergency_config(
+    payload: EmergencyConfigPatchPayload,
+    _: bool = Depends(require_write_access),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    try:
+        translated = GardenSettingsTranslator().emergency_payload(payload.model_dump(exclude_none=True))
+        result = ConfigService().update_garden_module(module="emergency", payload=translated, session=session)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return {"status": "ok", **result}
+
+
+@router.post("/overrides/actuators/{actuator_id}")
+def create_manual_override(
+    actuator_id: str,
+    payload: ManualOverridePayload,
+    registry: EntityRegistry = Depends(get_registry),
+    _: bool = Depends(require_write_access),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    registry.get_actuator(actuator_id)
+    record = ManualOverrideService().create_override(
+        session,
+        actuator_id=actuator_id,
+        mode=payload.mode,
+        expires_after_minutes=payload.expires_after_minutes,
+        pulse_seconds=payload.pulse_seconds,
+        reason=payload.reason,
+        source=payload.source,
+    )
+    session.commit()
+    return {
+        "status": "ok",
+        "override": {
+            "id": record.id,
+            "actuator_id": actuator_id,
+            "mode": record.mode,
+            "expires_at_utc": record.expires_at_utc.isoformat(),
+        },
+        "garden": GardenStateService().snapshot(registry=registry, session=session),
+    }
+
+
+@router.delete("/overrides/actuators/{actuator_id}")
+def delete_manual_override(
+    actuator_id: str,
+    registry: EntityRegistry = Depends(get_registry),
+    _: bool = Depends(require_write_access),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    registry.get_actuator(actuator_id)
+    record = ManualOverrideService().cancel_override(session, actuator_id=actuator_id)
+    session.commit()
+    return {
+        "status": "ok",
+        "cancelled": bool(record),
+        "garden": GardenStateService().snapshot(registry=registry, session=session),
+    }
+
+
+@router.post("/garden/return-to-auto")
+def return_all_to_auto(
+    registry: EntityRegistry = Depends(get_registry),
+    _: bool = Depends(require_write_access),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    cancelled = ManualOverrideService().cancel_all(session, source="return_to_auto")
+    session.commit()
+    return {
+        "status": "ok",
+        "cancelled": cancelled,
+        "garden": GardenStateService().snapshot(registry=registry, session=session),
+    }
+
+
+@router.post("/garden/safe-shutdown")
+def safe_shutdown(
+    registry: EntityRegistry = Depends(get_registry),
+    _: bool = Depends(require_write_access),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    override_service = ManualOverrideService()
+    override_service.create_override(session, actuator_id="exhaust_fan", mode="on", reason="safe_shutdown")
+    override_service.create_override(session, actuator_id="warm_pads", mode="off", reason="safe_shutdown")
+    override_service.create_override(session, actuator_id="lamps", mode="off", reason="safe_shutdown")
+    override_service.create_override(session, actuator_id="water_pump", mode="off", reason="safe_shutdown")
+    session.commit()
+    return {
+        "status": "ok",
+        "garden": GardenStateService().snapshot(registry=registry, session=session),
+    }
+
+
 @router.get("/automations/{automation_id}")
 def automation_detail(
     automation_id: str,
@@ -205,4 +377,7 @@ def automations_run(
 ) -> dict:
     result = AutomationService().run_cycle(registry=registry, session=session)
     session.commit()
-    return result
+    return {
+        **result,
+        "garden": GardenStateService().snapshot(registry=registry, session=session),
+    }

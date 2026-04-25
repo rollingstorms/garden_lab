@@ -18,6 +18,12 @@ def get_config():
     return load_config(base, local)
 
 
+def get_config_paths() -> tuple[Path, Path]:
+    base = Path(os.environ.get("GROWLAB_CONFIG_BASE", "config/base.yaml"))
+    local = Path(os.environ.get("GROWLAB_CONFIG_LOCAL", "config/local.yaml"))
+    return base, local
+
+
 @lru_cache(maxsize=1)
 def get_registry() -> EntityRegistry:
     return EntityRegistry(config=get_config())
@@ -40,3 +46,10 @@ def get_db_session():
         yield session
     finally:
         session.close()
+
+
+def reset_runtime_caches() -> None:
+    get_config.cache_clear()
+    get_registry.cache_clear()
+    get_engine.cache_clear()
+    get_session_factory.cache_clear()
