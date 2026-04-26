@@ -83,7 +83,7 @@ function render() {
 
 function syncSectionVisibility() {
   document.querySelectorAll("[data-section]").forEach((section) => {
-    const active = !isMobileLayout() || section.dataset.section === state.activeSection;
+    const active = section.dataset.section === state.activeSection;
     section.classList.toggle("is-active", active);
   });
   document.querySelectorAll("[data-section-tab]").forEach((tab) => {
@@ -159,15 +159,16 @@ function renderActuators() {
 
 function renderActuatorCard(actuatorId, actuator) {
   const powerText = actuator.power === true ? "ON" : actuator.power === false ? "OFF" : "UNKNOWN";
+  const activeAction = currentActuatorAction(actuatorId, actuator);
   const controls = actuatorId === "water_pump"
     ? `
       <div class="control-cluster">
         <div class="cluster-label">Pump Actions</div>
         <div class="segmented-controls segmented-controls--pump">
-          <button class="segmented-action is-primary" data-action="pulse" data-actuator="${actuatorId}" data-seconds="5">Pulse 5s</button>
-          <button class="segmented-action" data-action="pulse" data-actuator="${actuatorId}" data-seconds="30">Pulse 30s</button>
-          <button class="segmented-action" data-action="off" data-actuator="${actuatorId}">Off</button>
-          <button class="segmented-action" data-action="auto" data-actuator="${actuatorId}">Auto</button>
+          <button class="segmented-action ${activeAction === "pulse-5" ? "is-primary" : ""}" aria-pressed="${String(activeAction === "pulse-5")}" data-action="pulse" data-actuator="${actuatorId}" data-seconds="5">Pulse 5s</button>
+          <button class="segmented-action ${activeAction === "pulse-30" ? "is-primary" : ""}" aria-pressed="${String(activeAction === "pulse-30")}" data-action="pulse" data-actuator="${actuatorId}" data-seconds="30">Pulse 30s</button>
+          <button class="segmented-action ${activeAction === "off" ? "is-primary" : ""}" aria-pressed="${String(activeAction === "off")}" data-action="off" data-actuator="${actuatorId}">Off</button>
+          <button class="segmented-action ${activeAction === "auto" ? "is-primary" : ""}" aria-pressed="${String(activeAction === "auto")}" data-action="auto" data-actuator="${actuatorId}">Auto</button>
         </div>
       </div>
     `
@@ -175,9 +176,9 @@ function renderActuatorCard(actuatorId, actuator) {
       <div class="control-cluster">
         <div class="cluster-label">Device Mode</div>
         <div class="segmented-controls">
-          <button class="segmented-action is-primary" data-action="on" data-actuator="${actuatorId}">On</button>
-          <button class="segmented-action" data-action="off" data-actuator="${actuatorId}">Off</button>
-          <button class="segmented-action" data-action="auto" data-actuator="${actuatorId}">Auto</button>
+          <button class="segmented-action ${activeAction === "on" ? "is-primary" : ""}" aria-pressed="${String(activeAction === "on")}" data-action="on" data-actuator="${actuatorId}">On</button>
+          <button class="segmented-action ${activeAction === "off" ? "is-primary" : ""}" aria-pressed="${String(activeAction === "off")}" data-action="off" data-actuator="${actuatorId}">Off</button>
+          <button class="segmented-action ${activeAction === "auto" ? "is-primary" : ""}" aria-pressed="${String(activeAction === "auto")}" data-action="auto" data-actuator="${actuatorId}">Auto</button>
         </div>
       </div>
     `;
@@ -211,6 +212,18 @@ function renderActuatorCard(actuatorId, actuator) {
       </div>
     </article>
   `;
+}
+
+function currentActuatorAction(actuatorId, actuator) {
+  if (!actuator.override) return "auto";
+  if (actuator.override.mode === "pulse") {
+    const seconds = Number(actuator.override.pulse_seconds || 0);
+    if (seconds === 30) return "pulse-30";
+    return "pulse-5";
+  }
+  if (actuator.override.mode === "on") return "on";
+  if (actuator.override.mode === "off") return "off";
+  return actuatorId === "water_pump" ? "auto" : "auto";
 }
 
 function renderCharts() {

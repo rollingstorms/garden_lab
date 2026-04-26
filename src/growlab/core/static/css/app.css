@@ -531,6 +531,15 @@ button {
   font-weight: 600;
 }
 
+.segmented-action:focus-visible {
+  outline: 2px solid rgba(110, 240, 165, 0.6);
+  outline-offset: 2px;
+}
+
+.segmented-action:active {
+  transform: translateY(0);
+}
+
 .segmented-action.is-primary {
   color: #07110c;
   background: linear-gradient(135deg, var(--accent-2), #bbffd4);
@@ -750,9 +759,20 @@ button {
   background: linear-gradient(180deg, rgba(15, 29, 26, 0), rgba(15, 29, 26, 0.94) 40%);
 }
 
-.history-panels--control {
+.history-panels--control,
+.history-panels--bottom {
   display: grid;
   gap: 0.8rem;
+}
+
+.history-panels--bottom {
+  margin-top: 1rem;
+}
+
+.timeline-scroll {
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 0.2rem;
 }
 
 .timeline-list {
@@ -823,7 +843,8 @@ button {
   }
 
   .device-status,
-  .history-panels--control {
+  .history-panels--control,
+  .history-panels--bottom {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -858,10 +879,6 @@ button {
   .section-tabs {
     position: sticky;
     top: 0.8rem;
-  }
-
-  .dashboard-section {
-    display: grid;
   }
 
   .dashboard-sections {

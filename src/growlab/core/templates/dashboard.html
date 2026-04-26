@@ -47,28 +47,6 @@
         </div>
         <div class="device-grid" id="actuator-grid"></div>
       </section>
-
-      <section class="history-panels history-panels--control">
-        <section class="panel-card">
-          <div class="panel-header panel-header--tight">
-            <div>
-              <p class="panel-meta">Decisions</p>
-              <h2>Decision Timeline</h2>
-            </div>
-          </div>
-          <div class="timeline-list" id="decision-timeline"></div>
-        </section>
-
-        <section class="panel-card">
-          <div class="panel-header panel-header--tight">
-            <div>
-              <p class="panel-meta">Overrides</p>
-              <h2>Manual Override History</h2>
-            </div>
-          </div>
-          <div class="timeline-list" id="override-timeline"></div>
-        </section>
-      </section>
     </section>
 
     <section class="dashboard-section" data-section="sensors">
@@ -110,8 +88,8 @@
             <span class="config-card__toggle-label">Open</span>
           </button>
           <div class="config-power" data-config-power-group="climate">
-            <button class="config-power__button segmented-action" data-config-power="climate" data-enabled="true" type="button">On</button>
-            <button class="config-power__button segmented-action" data-config-power="climate" data-enabled="false" type="button">Off</button>
+            <button class="config-power__button segmented-action is-active" aria-pressed="true" data-config-power="climate" data-enabled="true" type="button">On</button>
+            <button class="config-power__button segmented-action" aria-pressed="false" data-config-power="climate" data-enabled="false" type="button">Off</button>
           </div>
           <div class="config-card__summary" id="climate-summary"></div>
           <div class="config-card__editor" id="climate-editor" hidden>
@@ -131,8 +109,8 @@
             <span class="config-card__toggle-label">Open</span>
           </button>
           <div class="config-power" data-config-power-group="light">
-            <button class="config-power__button segmented-action" data-config-power="light" data-enabled="true" type="button">On</button>
-            <button class="config-power__button segmented-action" data-config-power="light" data-enabled="false" type="button">Off</button>
+            <button class="config-power__button segmented-action is-active" aria-pressed="true" data-config-power="light" data-enabled="true" type="button">On</button>
+            <button class="config-power__button segmented-action" aria-pressed="false" data-config-power="light" data-enabled="false" type="button">Off</button>
           </div>
           <div class="config-card__summary" id="light-summary"></div>
           <div class="config-card__editor" id="light-editor" hidden>
@@ -152,8 +130,8 @@
             <span class="config-card__toggle-label">Open</span>
           </button>
           <div class="config-power" data-config-power-group="watering">
-            <button class="config-power__button segmented-action" data-config-power="watering" data-enabled="true" type="button">On</button>
-            <button class="config-power__button segmented-action" data-config-power="watering" data-enabled="false" type="button">Off</button>
+            <button class="config-power__button segmented-action is-active" aria-pressed="true" data-config-power="watering" data-enabled="true" type="button">On</button>
+            <button class="config-power__button segmented-action" aria-pressed="false" data-config-power="watering" data-enabled="false" type="button">Off</button>
           </div>
           <div class="config-card__summary" id="watering-summary"></div>
           <div class="config-card__editor" id="watering-editor" hidden>
@@ -173,8 +151,8 @@
             <span class="config-card__toggle-label">Open</span>
           </button>
           <div class="config-power" data-config-power-group="emergency">
-            <button class="config-power__button segmented-action" data-config-power="emergency" data-enabled="true" type="button">On</button>
-            <button class="config-power__button segmented-action" data-config-power="emergency" data-enabled="false" type="button">Off</button>
+            <button class="config-power__button segmented-action is-active" aria-pressed="true" data-config-power="emergency" data-enabled="true" type="button">On</button>
+            <button class="config-power__button segmented-action" aria-pressed="false" data-config-power="emergency" data-enabled="false" type="button">Off</button>
           </div>
           <div class="config-card__summary" id="emergency-summary"></div>
           <div class="config-card__editor" id="emergency-editor" hidden>
@@ -198,13 +176,39 @@
     </section>
   </section>
 
+  <section class="history-panels history-panels--bottom">
+    <section class="panel-card">
+      <div class="panel-header panel-header--tight">
+        <div>
+          <p class="panel-meta">Decisions</p>
+          <h2>Decision Timeline</h2>
+        </div>
+      </div>
+      <div class="timeline-scroll">
+        <div class="timeline-list" id="decision-timeline"></div>
+      </div>
+    </section>
+
+    <section class="panel-card">
+      <div class="panel-header panel-header--tight">
+        <div>
+          <p class="panel-meta">Overrides</p>
+          <h2>Manual Override History</h2>
+        </div>
+      </div>
+      <div class="timeline-scroll">
+        <div class="timeline-list" id="override-timeline"></div>
+      </div>
+    </section>
+  </section>
+
   <footer class="dashboard-footer">
     <div class="dashboard-footer__meta" id="timezone-display">Timezone: America/New_York</div>
     <div class="unit-switch" aria-label="Temperature units">
       <span class="unit-switch__label">Temp Units</span>
       <div class="unit-switch__buttons">
-        <button class="unit-switch__button segmented-action" data-temp-unit="C" type="button">C</button>
-        <button class="unit-switch__button segmented-action" data-temp-unit="F" type="button">F</button>
+        <button class="unit-switch__button segmented-action is-active" aria-pressed="true" data-temp-unit="C" type="button">C</button>
+        <button class="unit-switch__button segmented-action" aria-pressed="false" data-temp-unit="F" type="button">F</button>
       </div>
     </div>
   </footer>
