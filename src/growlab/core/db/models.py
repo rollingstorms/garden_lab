@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, Float, Integer, String
+from sqlalchemy import JSON, DateTime, Float, Index, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from growlab.shared.time import utc_now
@@ -14,6 +14,10 @@ class Base(DeclarativeBase):
 
 class SensorReading(Base):
     __tablename__ = "sensor_readings"
+    __table_args__ = (
+        Index("ix_sensor_readings_sensor_metric_ts", "sensor_id", "metric", "ts_utc"),
+        Index("ix_sensor_readings_sensor_ts", "sensor_id", "ts_utc"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     sensor_id: Mapped[str] = mapped_column(String(120), index=True)
@@ -39,6 +43,9 @@ class CollectorEvent(Base):
 
 class ActuatorEvent(Base):
     __tablename__ = "actuator_events"
+    __table_args__ = (
+        Index("ix_actuator_events_actuator_ts", "actuator_id", "ts_utc"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     actuator_id: Mapped[str] = mapped_column(String(120), index=True)

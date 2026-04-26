@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from growlab.core.db.models import (
@@ -62,6 +62,38 @@ def get_latest_actuator_event(session: Session, *, actuator_id: str) -> Optional
         .limit(1)
     )
     return session.execute(stmt).scalar_one_or_none()
+
+
+def get_latest_actuator_events(
+    session: Session,
+    *,
+    actuator_ids: list[str],
+) -> dict[str, ActuatorEvent]:
+    if not actuator_ids:
+        return {}
+
+    ranked = (
+        select(
+            ActuatorEvent.id.label("id"),
+            func.row_number()
+            .over(
+                partition_by=ActuatorEvent.actuator_id,
+                order_by=(ActuatorEvent.ts_utc.desc(), ActuatorEvent.id.desc()),
+            )
+            .label("row_num"),
+        )
+        .where(ActuatorEvent.actuator_id.in_(actuator_ids))
+        .subquery()
+    )
+    stmt = (
+        select(ActuatorEvent)
+        .join(ranked, ActuatorEvent.id == ranked.c.id)
+        .where(ranked.c.row_num == 1)
+    )
+    return {
+        row.actuator_id: row
+        for row in session.execute(stmt).scalars().all()
+    }
 
 
 def list_recent_actuator_events(

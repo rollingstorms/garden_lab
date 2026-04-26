@@ -323,3 +323,97 @@ def test_live_state_preferred_over_last_command_and_used_by_automation(tmp_path:
     latest = history_response.json()["history"]["decision_history"][-1]["payload"]
     assert not [item for item in latest["action_results"] if item["actuator_id"] == "warm_pads"]
     assert [item for item in latest["skipped_actions"] if item["actuator_id"] == "warm_pads"]
+
+
+def test_garden_state_uses_short_lived_cache_and_ingest_invalidates(tmp_path: Path, monkeypatch) -> None:
+    client, _ = build_client(tmp_path, monkeypatch)
+    seed_air_sensor(client, temp=25.0, humidity=50.0)
+
+    call_count = {"snapshot": 0}
+    original_snapshot = __import__("growlab.core.services.garden_state", fromlist=["GardenStateService"]).GardenStateService.snapshot
+
+    def counting_snapshot(self, *, registry, session):
+        call_count["snapshot"] += 1
+        return original_snapshot(self, registry=registry, session=session)
+
+    monkeypatch.setattr(
+        "growlab.core.services.garden_state.GardenStateService.snapshot",
+        counting_snapshot,
+    )
+
+    response = client.get("/api/garden/state")
+    assert response.status_code == 200
+    response = client.get("/api/garden/state")
+    assert response.status_code == 200
+    assert call_count["snapshot"] == 1
+
+    seed_air_sensor(client, temp=26.0, humidity=52.0)
+
+    response = client.get("/api/garden/state")
+    assert response.status_code == 200
+    assert call_count["snapshot"] == 2
+
+
+def test_garden_config_cache_is_invalidated_after_patch(tmp_path: Path, monkeypatch) -> None:
+    client, _ = build_client(tmp_path, monkeypatch)
+
+    call_count = {"config": 0}
+    original_get_garden_config = __import__(
+        "growlab.core.services.configuration",
+        fromlist=["ConfigService"],
+    ).ConfigService.get_garden_config
+
+    def counting_get_garden_config(self):
+        call_count["config"] += 1
+        return original_get_garden_config(self)
+
+    monkeypatch.setattr(
+        "growlab.core.services.configuration.ConfigService.get_garden_config",
+        counting_get_garden_config,
+    )
+
+    response = client.get("/api/garden/config")
+    assert response.status_code == 200
+    response = client.get("/api/garden/config")
+    assert response.status_code == 200
+    assert call_count["config"] == 1
+
+    response = client.patch(
+        "/api/config/garden/watering",
+        json={
+            "mode": "simple",
+            "watering_mode": "schedule",
+            "interval_minutes": 180,
+            "run_seconds": 45,
+            "anchor": "07:30",
+        },
+    )
+    assert response.status_code == 200
+    assert call_count["config"] == 2
+
+    response = client.get("/api/garden/config")
+    assert response.status_code == 200
+    assert call_count["config"] == 3
+
+
+def test_garden_charts_downsamples_large_series(tmp_path: Path, monkeypatch) -> None:
+    client, _ = build_client(tmp_path, monkeypatch)
+    now = utc_now()
+    for minute in range(400):
+        response = client.post(
+            "/api/ingest/sensors/air_lab",
+            json={
+                "ts_utc": (now - timedelta(minutes=399 - minute)).isoformat(),
+                "metrics": {
+                    "temperature_c": 20.0 + (minute % 10),
+                    "humidity_pct": 50.0 + (minute % 5),
+                },
+            },
+        )
+        assert response.status_code == 200
+
+    response = client.get("/api/garden/charts?hours=24")
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["sensors"]["air_lab"]["history"]["temperature_c"]) <= 240
+    assert len(payload["sensors"]["air_lab"]["history"]["humidity_pct"]) <= 240

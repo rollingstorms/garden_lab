@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from growlab.core.app.dependencies import get_actuator_state_service, get_db_session, get_registry
+from growlab.core.app.dependencies import (
+    get_actuator_state_service,
+    get_dashboard_response_cache,
+    get_db_session,
+    get_registry,
+)
 from growlab.core.config.registry import EntityRegistry
 from growlab.core.db.repo_events import get_latest_actuator_event, get_latest_automation_event
 from growlab.core.db.repo_readings import get_latest_sensor_metrics, get_sensor_history
@@ -29,6 +34,8 @@ from growlab.core.services.garden_state import GardenStateService
 from growlab.core.services.overrides import ManualOverrideService
 
 router = APIRouter(prefix="/api")
+STATE_CACHE_TTL_SECONDS = 2.0
+HEAVY_CACHE_TTL_SECONDS = 20.0
 
 
 def require_write_access() -> bool:
@@ -37,6 +44,10 @@ def require_write_access() -> bool:
         # Placeholder dependency so a real gate can be added without moving route logic.
         return True
     return True
+
+
+def invalidate_dashboard_caches() -> None:
+    get_dashboard_response_cache().invalidate_prefix(("garden",))
 
 
 @router.get("/health")
@@ -76,6 +87,7 @@ def ingest_sensor(
         source_id=source_id,
     )
     session.commit()
+    invalidate_dashboard_caches()
     return {
         "accepted": True,
         "sensor_id": sensor_id,
@@ -122,7 +134,7 @@ def sensor_history_endpoint(
     hours: int = 24,
     session: Session = Depends(get_db_session),
 ) -> dict:
-    rows = get_sensor_history(session, sensor_id=sensor_id, metric=metric)
+    rows = get_sensor_history(session, sensor_id=sensor_id, metric=metric, hours=hours)
     return {
         "sensor_id": sensor_id,
         "metric": metric,
@@ -187,6 +199,7 @@ def actuator_command(
         payload=payload,
     )
     session.commit()
+    invalidate_dashboard_caches()
     return result
 
 
@@ -195,7 +208,11 @@ def garden_state(
     registry: EntityRegistry = Depends(get_registry),
     session: Session = Depends(get_db_session),
 ) -> dict:
-    return GardenStateService().snapshot(registry=registry, session=session)
+    return get_dashboard_response_cache().get_or_set(
+        ("garden", "state"),
+        ttl_seconds=STATE_CACHE_TTL_SECONDS,
+        builder=lambda: GardenStateService().snapshot(registry=registry, session=session),
+    )
 
 
 @router.get("/garden/charts")
@@ -208,7 +225,11 @@ def garden_charts(
         hours = 1
     if hours > 168:
         hours = 168
-    return GardenStateService().charts(registry=registry, session=session, hours=hours)
+    return get_dashboard_response_cache().get_or_set(
+        ("garden", "charts", hours),
+        ttl_seconds=HEAVY_CACHE_TTL_SECONDS,
+        builder=lambda: GardenStateService().charts(registry=registry, session=session, hours=hours),
+    )
 
 
 @router.get("/garden/history")
@@ -220,12 +241,20 @@ def garden_history(
         hours = 1
     if hours > 168:
         hours = 168
-    return GardenStateService().history(session=session, hours=hours)
+    return get_dashboard_response_cache().get_or_set(
+        ("garden", "history", hours),
+        ttl_seconds=HEAVY_CACHE_TTL_SECONDS,
+        builder=lambda: GardenStateService().history(session=session, hours=hours),
+    )
 
 
 @router.get("/garden/config")
 def garden_config(session: Session = Depends(get_db_session)) -> dict:
-    return ConfigService().get_garden_config()
+    return get_dashboard_response_cache().get_or_set(
+        ("garden", "config"),
+        ttl_seconds=HEAVY_CACHE_TTL_SECONDS,
+        builder=lambda: ConfigService().get_garden_config(),
+    )
 
 
 @router.patch("/config/garden/climate")
@@ -240,6 +269,7 @@ def patch_climate_config(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     session.commit()
+    invalidate_dashboard_caches()
     return {"status": "ok", **result}
 
 
@@ -255,6 +285,7 @@ def patch_lighting_config(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     session.commit()
+    invalidate_dashboard_caches()
     return {"status": "ok", **result}
 
 
@@ -270,6 +301,7 @@ def patch_watering_config(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     session.commit()
+    invalidate_dashboard_caches()
     return {"status": "ok", **result}
 
 
@@ -285,6 +317,7 @@ def patch_emergency_config(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     session.commit()
+    invalidate_dashboard_caches()
     return {"status": "ok", **result}
 
 
@@ -306,6 +339,7 @@ def patch_garden_module_enabled(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     session.commit()
+    invalidate_dashboard_caches()
     return {"status": "ok", **result}
 
 
@@ -319,6 +353,7 @@ def reset_garden_defaults(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     session.commit()
+    invalidate_dashboard_caches()
     return {"status": "ok", **result}
 
 
@@ -341,6 +376,7 @@ def create_manual_override(
         source=payload.source,
     )
     session.commit()
+    invalidate_dashboard_caches()
     return {
         "status": "ok",
         "override": {
@@ -363,6 +399,7 @@ def delete_manual_override(
     registry.get_actuator(actuator_id)
     record = ManualOverrideService().cancel_override(session, actuator_id=actuator_id)
     session.commit()
+    invalidate_dashboard_caches()
     return {
         "status": "ok",
         "cancelled": bool(record),
@@ -378,6 +415,7 @@ def return_all_to_auto(
 ) -> dict:
     cancelled = ManualOverrideService().cancel_all(session, source="return_to_auto")
     session.commit()
+    invalidate_dashboard_caches()
     return {
         "status": "ok",
         "cancelled": cancelled,
@@ -397,6 +435,7 @@ def safe_shutdown(
     override_service.create_override(session, actuator_id="lamps", mode="off", reason="safe_shutdown")
     override_service.create_override(session, actuator_id="water_pump", mode="off", reason="safe_shutdown")
     session.commit()
+    invalidate_dashboard_caches()
     return {
         "status": "ok",
         "garden": GardenStateService().snapshot(registry=registry, session=session),
@@ -442,6 +481,7 @@ def automations_run(
 ) -> dict:
     result = AutomationService().run_cycle(registry=registry, session=session)
     session.commit()
+    invalidate_dashboard_caches()
     return {
         **result,
         "garden": GardenStateService().snapshot(registry=registry, session=session),

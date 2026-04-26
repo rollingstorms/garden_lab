@@ -10,6 +10,7 @@ from growlab.core.config.loader import load_config
 from growlab.core.config.registry import EntityRegistry
 from growlab.core.db.session import build_engine, build_session_factory
 from growlab.core.services.actuator_state import ActuatorStateService
+from growlab.core.services.runtime_cache import TTLCache
 
 
 @lru_cache(maxsize=1)
@@ -45,6 +46,11 @@ def get_actuator_state_service() -> ActuatorStateService:
     return ActuatorStateService()
 
 
+@lru_cache(maxsize=1)
+def get_dashboard_response_cache() -> TTLCache:
+    return TTLCache()
+
+
 def get_db_session():
     session_factory = get_session_factory()
     session: Session = session_factory()
@@ -55,8 +61,13 @@ def get_db_session():
 
 
 def reset_runtime_caches() -> None:
+    from growlab.core.services.configuration import clear_garden_config_cache
+
     get_actuator_state_service().clear()
     get_actuator_state_service.cache_clear()
+    get_dashboard_response_cache().clear()
+    get_dashboard_response_cache.cache_clear()
+    clear_garden_config_cache()
     get_config.cache_clear()
     get_registry.cache_clear()
     get_engine.cache_clear()

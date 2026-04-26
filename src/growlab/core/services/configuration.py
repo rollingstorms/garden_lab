@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 import yaml
@@ -18,10 +19,23 @@ from growlab.core.config.models import (
 from growlab.core.db.repo_events import insert_system_event
 
 GARDEN_AUTOMATION_ID = "garden_equilibrium"
+_GARDEN_CONFIG_LOCK = RLock()
+_GARDEN_CONFIG_CACHE: dict[str, Any] | None = None
+
+
+def clear_garden_config_cache() -> None:
+    global _GARDEN_CONFIG_CACHE
+    with _GARDEN_CONFIG_LOCK:
+        _GARDEN_CONFIG_CACHE = None
 
 
 class ConfigService:
     def get_garden_config(self) -> dict[str, Any]:
+        global _GARDEN_CONFIG_CACHE
+        with _GARDEN_CONFIG_LOCK:
+            if _GARDEN_CONFIG_CACHE is not None:
+                return deepcopy(_GARDEN_CONFIG_CACHE)
+
         base_path, local_path = get_config_paths()
         base_data = load_yaml_file(base_path)
         local_data = load_yaml_file(local_path)
@@ -40,13 +54,16 @@ class ConfigService:
             .get(GARDEN_AUTOMATION_ID, {})
             .get("controller", {})
         )
-        return {
+        payload = {
             "automation_id": GARDEN_AUTOMATION_ID,
             "effective": controller.model_dump(mode="json"),
             "base": base_controller,
             "override": local_controller,
             "diff": _diff_dict(base_controller, controller.model_dump(mode="json")),
         }
+        with _GARDEN_CONFIG_LOCK:
+            _GARDEN_CONFIG_CACHE = deepcopy(payload)
+        return deepcopy(payload)
 
     def update_garden_module(
         self,

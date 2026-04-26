@@ -10,11 +10,11 @@ from growlab.core.app.dependencies import get_actuator_state_service
 from growlab.core.config.models import ActionConfig, ConditionConfig, ConditionGroupConfig
 from growlab.core.config.registry import EntityRegistry
 from growlab.core.db.repo_events import (
-    get_latest_actuator_event,
+    get_latest_actuator_events,
     get_latest_automation_event,
     insert_automation_event,
 )
-from growlab.core.db.repo_readings import get_latest_sensor_metrics
+from growlab.core.db.repo_readings import get_latest_sensor_metrics_batch
 from growlab.core.schemas.api import ActuatorCommandPayload
 from growlab.core.services.commands import CommandService
 from growlab.core.services.garden import (
@@ -230,12 +230,12 @@ class AutomationService:
             for action in controller.emergency.actions.off:
                 actuator_ids.add(action.actuator)
 
-        latest_by_sensor: dict[str, dict[str, Any]] = {}
+        latest_by_sensor = get_latest_sensor_metrics_batch(
+            session,
+            sensor_ids=sorted({sensor_id for sensor_id, _ in sensor_refs}),
+        )
         for sensor_id, metric in sensor_refs:
-            latest = latest_by_sensor.setdefault(
-                sensor_id,
-                get_latest_sensor_metrics(session, sensor_id=sensor_id),
-            )
+            latest = latest_by_sensor.get(sensor_id, {})
             value = latest.get(metric)
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 runtime.sensors[(sensor_id, metric)] = float(value)
@@ -244,8 +244,9 @@ class AutomationService:
             registry=registry,
             session=session,
         )
+        latest_events = get_latest_actuator_events(session, actuator_ids=sorted(actuator_ids))
         for actuator_id in actuator_ids:
-            latest_event = get_latest_actuator_event(session, actuator_id=actuator_id)
+            latest_event = latest_events.get(actuator_id)
             power = live_states[actuator_id].power
             ts_utc = None
             if latest_event:
@@ -275,20 +276,31 @@ class AutomationService:
     ) -> bool:
         if group is None:
             return False
+        conditions = list(group.all or []) + list(group.any or [])
+        latest_by_sensor = get_latest_sensor_metrics_batch(
+            session,
+            sensor_ids=sorted({condition.sensor for condition in conditions}),
+        )
         if group.all:
-            return all(self._evaluate_condition(registry, session, condition) for condition in group.all)
+            return all(
+                self._evaluate_condition(registry, condition, latest_by_sensor)
+                for condition in group.all
+            )
         if group.any:
-            return any(self._evaluate_condition(registry, session, condition) for condition in group.any)
+            return any(
+                self._evaluate_condition(registry, condition, latest_by_sensor)
+                for condition in group.any
+            )
         return False
 
     def _evaluate_condition(
         self,
         registry: EntityRegistry,
-        session: Session,
         condition: ConditionConfig,
+        latest_by_sensor: dict[str, dict[str, Any]],
     ) -> bool:
         registry.get_sensor(condition.sensor)
-        latest = get_latest_sensor_metrics(session, sensor_id=condition.sensor)
+        latest = latest_by_sensor.get(condition.sensor, {})
         current_value = latest.get(condition.metric)
         if current_value is None or isinstance(current_value, str):
             return False

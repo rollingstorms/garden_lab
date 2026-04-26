@@ -4,7 +4,12 @@ import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from growlab.core.app.dependencies import get_actuator_state_service, get_registry, get_session_factory
+from growlab.core.app.dependencies import (
+    get_actuator_state_service,
+    get_dashboard_response_cache,
+    get_registry,
+    get_session_factory,
+)
 from growlab.core.config.models import AppConfig
 from growlab.core.services.automation import AutomationService
 
@@ -54,8 +59,11 @@ class AutomationScheduler:
                 registry=get_registry(),
                 session=session,
             )
+            session.commit()
+            get_dashboard_response_cache().invalidate_prefix(("garden",))
             logger.info("Automation cycle finished: %s", result)
         except Exception:
+            session.rollback()
             logger.exception("Automation cycle failed")
         finally:
             session.close()

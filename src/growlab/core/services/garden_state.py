@@ -8,16 +8,18 @@ from sqlalchemy.orm import Session
 from growlab.core.app.dependencies import get_actuator_state_service
 from growlab.core.config.registry import EntityRegistry
 from growlab.core.db.repo_events import (
-    get_latest_actuator_event,
+    get_latest_actuator_events,
     get_latest_automation_event,
     list_recent_actuator_events,
     list_recent_automation_events,
     list_recent_system_events,
 )
-from growlab.core.db.repo_overrides import get_active_manual_override
-from growlab.core.db.repo_readings import get_latest_sensor_metrics, get_sensor_history
+from growlab.core.db.repo_overrides import list_active_manual_overrides
+from growlab.core.db.repo_readings import get_latest_sensor_metrics_batch, get_sensor_history_batch
 from growlab.core.services.configuration import ConfigService, GARDEN_AUTOMATION_ID
 from growlab.core.services.overrides import ManualOverrideService
+
+CHART_POINT_BUDGET = 240
 
 
 class GardenStateService:
@@ -27,8 +29,6 @@ class GardenStateService:
         registry: EntityRegistry,
         session: Session,
     ) -> dict[str, Any]:
-        override_service = ManualOverrideService()
-        override_service.cleanup_expired(session)
         latest_decision = get_latest_automation_event(session, automation_id=GARDEN_AUTOMATION_ID)
         sensors = self._build_sensor_state(registry=registry, session=session)
         actuators = self._build_actuator_state(registry=registry, session=session)
@@ -80,17 +80,16 @@ class GardenStateService:
 
     def _build_sensor_state(self, *, registry: EntityRegistry, session: Session) -> dict[str, Any]:
         data: dict[str, Any] = {}
+        sensor_ids = list(registry.config.sensors.keys())
+        latest_by_sensor = get_latest_sensor_metrics_batch(session, sensor_ids=sensor_ids)
+        refs = [
+            (sensor_id, metric_id)
+            for sensor_id, sensor in registry.config.sensors.items()
+            for metric_id in sensor.metrics
+        ]
+        recent_history = get_sensor_history_batch(session, refs=refs, limit_per_metric=2)
         for sensor_id, sensor in registry.config.sensors.items():
-            latest = get_latest_sensor_metrics(session, sensor_id=sensor_id)
-            recent_history: dict[str, list[dict[str, Any]]] = {}
-            for metric_id in sensor.metrics:
-                recent_history[metric_id] = [
-                    {
-                        "ts_utc": row.ts_utc.isoformat(),
-                        "value": row.value_num if row.value_num is not None else row.value_text,
-                    }
-                    for row in get_sensor_history(session, sensor_id=sensor_id, metric=metric_id, limit=2)
-                ]
+            latest = latest_by_sensor.get(sensor_id, {})
             data[sensor_id] = {
                 "label": sensor.label,
                 "metrics": {
@@ -98,7 +97,11 @@ class GardenStateService:
                         "label": metric.label,
                         "unit": metric.unit,
                         "value": latest.get(metric_id),
-                        "previous": recent_history[metric_id][-2]["value"] if len(recent_history[metric_id]) > 1 else None,
+                        "previous": (
+                            _reading_value(history[-2])
+                            if len(history := recent_history.get((sensor_id, metric_id), [])) > 1
+                            else None
+                        ),
                     }
                     for metric_id, metric in sensor.metrics.items()
                 },
@@ -108,17 +111,28 @@ class GardenStateService:
     def _build_chart_state(self, *, registry: EntityRegistry, session: Session, hours: int = 24) -> dict[str, Any]:
         data: dict[str, Any] = {}
         limit = min(hours * 60 + 60, 1500)
+        sensor_ids = list(registry.config.sensors.keys())
+        latest_by_sensor = get_latest_sensor_metrics_batch(session, sensor_ids=sensor_ids)
+        refs = [
+            (sensor_id, metric_id)
+            for sensor_id, sensor in registry.config.sensors.items()
+            for metric_id in sensor.metrics
+        ]
+        history_rows = get_sensor_history_batch(session, refs=refs, hours=hours, limit_per_metric=limit)
         for sensor_id, sensor in registry.config.sensors.items():
-            latest = get_latest_sensor_metrics(session, sensor_id=sensor_id)
+            latest = latest_by_sensor.get(sensor_id, {})
             history = {}
             for metric_id in sensor.metrics:
-                history[metric_id] = [
-                    {
-                        "ts_utc": row.ts_utc.isoformat(),
-                        "value": row.value_num if row.value_num is not None else row.value_text,
-                    }
-                    for row in get_sensor_history(session, sensor_id=sensor_id, metric=metric_id, hours=hours, limit=limit)
-                ]
+                history[metric_id] = _downsample_series(
+                    [
+                        {
+                            "ts_utc": row.ts_utc.isoformat(),
+                            "value": row.value_num if row.value_num is not None else row.value_text,
+                        }
+                        for row in history_rows.get((sensor_id, metric_id), [])
+                    ],
+                    max_points=CHART_POINT_BUDGET,
+                )
             data[sensor_id] = {
                 "label": sensor.label,
                 "metrics": {
@@ -138,9 +152,15 @@ class GardenStateService:
         state_service = get_actuator_state_service()
         live_states = state_service.get_states(registry=registry, session=session)
         decision_event = get_latest_automation_event(session, automation_id=GARDEN_AUTOMATION_ID)
+        actuator_ids = list(registry.config.actuators.keys())
+        latest_events = get_latest_actuator_events(session, actuator_ids=actuator_ids)
+        active_overrides = {
+            override.actuator_id: override
+            for override in list_active_manual_overrides(session)
+        }
         for actuator_id, actuator in registry.config.actuators.items():
-            latest_event = get_latest_actuator_event(session, actuator_id=actuator_id)
-            active_override = get_active_manual_override(session, actuator_id=actuator_id)
+            latest_event = latest_events.get(actuator_id)
+            active_override = active_overrides.get(actuator_id)
             last_command_power = None
             if latest_event and isinstance(latest_event.payload_json.get("command"), dict):
                 last_command_power = latest_event.payload_json["command"].get("power")
@@ -244,3 +264,17 @@ def utc_now_iso() -> str:
     from growlab.shared.time import utc_now
 
     return utc_now().isoformat()
+
+
+def _reading_value(row) -> Any:
+    return row.value_num if row.value_num is not None else row.value_text
+
+
+def _downsample_series(points: list[dict[str, Any]], *, max_points: int) -> list[dict[str, Any]]:
+    if len(points) <= max_points:
+        return points
+    stride = max(1, len(points) // max_points)
+    sampled = points[::stride]
+    if sampled[-1] != points[-1]:
+        sampled.append(points[-1])
+    return sampled[:max_points]

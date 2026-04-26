@@ -133,6 +133,19 @@ async function loadHeavyState() {
   ]);
 }
 
+function ensureSectionData(section) {
+  if (section === "charts") {
+    const tasks = [];
+    if (!state.chartsData) tasks.push(loadGardenCharts());
+    if (!state.historyData) tasks.push(loadGardenHistory());
+    return Promise.allSettled(tasks);
+  }
+  if (section === "config" && !state.configData) {
+    return loadGardenConfig().catch(() => {});
+  }
+  return Promise.resolve();
+}
+
 function render() {
   if (!state.garden) return;
   syncSectionVisibility();
@@ -1244,6 +1257,7 @@ function bindSectionTabs() {
     button.addEventListener("click", () => {
       state.activeSection = button.dataset.sectionTab;
       syncSectionVisibility();
+      ensureSectionData(state.activeSection).catch(() => {});
     });
   });
 }
@@ -1350,6 +1364,10 @@ function openRangePicker() {
   sheet.hidden = false;
 }
 
+function closeRangePicker() {
+  document.getElementById("drum-sheet").hidden = true;
+}
+
 function updateDrumHighlight(drum) {
   const idx = Math.max(0, Math.min(
     CHART_RANGE_OPTIONS.length - 1,
@@ -1360,12 +1378,17 @@ function updateDrumHighlight(drum) {
 
 function applyRangePicker() {
   const drum = document.getElementById("drum-scroll");
+  const items = drum.querySelectorAll(".drum-item");
+  if (!items.length) {
+    closeRangePicker();
+    return;
+  }
   const idx = Math.max(0, Math.min(
     CHART_RANGE_OPTIONS.length - 1,
     Math.round(drum.scrollTop / DRUM_ITEM_H),
   ));
   const opt = CHART_RANGE_OPTIONS[idx];
-  document.getElementById("drum-sheet").hidden = true;
+  closeRangePicker();
   if (opt.hours !== state.chartHours) {
     state.chartHours = opt.hours;
     window.localStorage.setItem("gardenLab.chartHours", String(opt.hours));
@@ -1382,11 +1405,16 @@ function bindRangePicker() {
   const sheet = document.getElementById("drum-sheet");
   const drum = document.getElementById("drum-scroll");
   const label = document.getElementById("range-pill-label");
+  sheet.hidden = true;
 
   const currentOpt = CHART_RANGE_OPTIONS.find((o) => o.hours === state.chartHours) || CHART_RANGE_OPTIONS[2];
   label.textContent = currentOpt.label;
 
-  btn.addEventListener("click", openRangePicker);
+  btn.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openRangePicker();
+  });
   sheet.querySelector(".drum-sheet__backdrop").addEventListener("click", applyRangePicker);
   sheet.querySelector(".drum-done-btn").addEventListener("click", applyRangePicker);
 
@@ -1409,24 +1437,27 @@ function bindRangePicker() {
 bindEvents();
 loadGardenState()
   .then(() => {
-    setTimeout(() => loadGardenCharts().catch(() => {}), 200);
-    setTimeout(() => loadGardenHistory().catch(() => {}), 600);
-    setTimeout(() => loadGardenConfig().catch(() => {}), 1000);
+    syncSectionVisibility();
   })
   .catch((error) => showToast(error.message, true));
 setInterval(() => {
   loadGardenState().catch(() => {});
 }, 5000);
 setInterval(() => {
+  if (state.activeSection !== "charts") return;
   loadGardenCharts().catch(() => {});
 }, 30000);
 setInterval(() => {
-  loadGardenHistory().catch(() => {});
-  loadGardenConfig().catch(() => {});
+  if (state.activeSection === "charts") {
+    loadGardenHistory().catch(() => {});
+    return;
+  }
+  if (state.activeSection === "config") {
+    loadGardenConfig().catch(() => {});
+  }
 }, 45000);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   loadGardenState().catch(() => {});
-  loadGardenCharts().catch(() => {});
-  loadGardenHistory().catch(() => {});
+  ensureSectionData(state.activeSection).catch(() => {});
 });
