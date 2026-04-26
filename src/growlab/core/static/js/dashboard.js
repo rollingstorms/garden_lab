@@ -116,7 +116,9 @@ function renderFooter() {
   const timezone = state.garden?.timezone || "America/New_York";
   els.timezoneDisplay.textContent = `Timezone: ${timezone}`;
   document.querySelectorAll("[data-temp-unit]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.tempUnit === state.temperatureUnit);
+    const active = button.dataset.tempUnit === state.temperatureUnit;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
   });
 }
 
@@ -579,7 +581,9 @@ function renderConfigPowerStates() {
     const module = group.dataset.configPowerGroup;
     const enabled = modules[module]?.enabled !== false;
     group.querySelectorAll("[data-config-power]").forEach((button) => {
-      button.classList.toggle("is-active", String(enabled) === button.dataset.enabled);
+      const active = String(enabled) === button.dataset.enabled;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
     });
     const card = group.closest("[data-config-card]");
     if (card) card.classList.toggle("is-disabled", !enabled);
@@ -920,6 +924,7 @@ async function handleConfigPower(event) {
   if (!button) return;
   const module = button.dataset.configPower;
   const enabled = button.dataset.enabled === "true";
+  if (button.classList.contains("is-active")) return;
   try {
     await fetchJson(`/api/config/garden/${module}/enabled`, {
       method: "PATCH",
@@ -998,6 +1003,7 @@ function bindUtilityActions() {
   });
   document.querySelectorAll("[data-temp-unit]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (button.dataset.tempUnit === state.temperatureUnit) return;
       state.temperatureUnit = button.dataset.tempUnit;
       window.localStorage.setItem("gardenLab.temperatureUnit", state.temperatureUnit);
       render();

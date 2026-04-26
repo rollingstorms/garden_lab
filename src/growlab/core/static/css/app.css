@@ -98,10 +98,6 @@ button {
   min-width: 52px;
   min-height: 42px;
   padding: 0.62rem 0.78rem;
-  border-radius: 14px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(172, 229, 197, 0.1);
   font-weight: 700;
 }
 
@@ -109,6 +105,11 @@ button {
   color: #07110c;
   background: linear-gradient(135deg, var(--temp), #ffd2a8);
   box-shadow: 0 10px 20px rgba(255, 154, 104, 0.2);
+}
+
+.unit-switch__button:active,
+.config-power__button:active {
+  transform: translateY(0);
 }
 
 .top-shell,
@@ -193,7 +194,9 @@ button {
 .mode-toggle,
 .segmented-action,
 .section-tab,
-.config-card__header-button {
+.config-card__header-button,
+.config-power__button,
+.unit-switch__button {
   transition: transform 140ms ease, background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
@@ -201,7 +204,9 @@ button {
 .mode-toggle:hover,
 .segmented-action:hover,
 .section-tab:hover,
-.config-card__header-button:hover {
+.config-card__header-button:hover,
+.config-power__button:hover,
+.unit-switch__button:hover {
   transform: translateY(-1px);
 }
 
@@ -649,10 +654,6 @@ button {
 .config-power__button {
   min-height: 44px;
   padding: 0.68rem 0.8rem;
-  border-radius: 14px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(172, 229, 197, 0.1);
   font-weight: 700;
 }
 
