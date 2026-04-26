@@ -1031,7 +1031,7 @@ async function handleActuatorAction(event) {
       });
     }
     showToast(`Updated ${labelizeActuator(actuatorId)}`);
-    await runAutomationCycle();
+    loadGardenState().catch(() => {});
   } catch (error) {
     delete state.optimisticActuators[actuatorId];
     renderActuators();
