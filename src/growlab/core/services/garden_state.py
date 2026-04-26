@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from growlab.core.app.dependencies import get_actuator_state_service
 from growlab.core.config.registry import EntityRegistry
 from growlab.core.db.repo_events import (
     get_latest_actuator_event,
@@ -29,9 +30,9 @@ class GardenStateService:
         override_service = ManualOverrideService()
         override_service.cleanup_expired(session)
         latest_decision = get_latest_automation_event(session, automation_id=GARDEN_AUTOMATION_ID)
-        garden_config = ConfigService().get_garden_config()
         sensors = self._build_sensor_state(registry=registry, session=session)
         actuators = self._build_actuator_state(registry=registry, session=session)
+        effective_config = ConfigService().get_garden_config()["effective"]
         return {
             "generated_at": (latest_decision.ts_utc.isoformat() if latest_decision else None),
             "automation_id": GARDEN_AUTOMATION_ID,
@@ -54,11 +55,54 @@ class GardenStateService:
             },
             "sensors": sensors,
             "actuators": actuators,
-            "config": garden_config,
+            "config": {"effective": effective_config},
+        }
+
+    def charts(
+        self,
+        *,
+        registry: EntityRegistry,
+        session: Session,
+    ) -> dict[str, Any]:
+        return {
+            "generated_at": utc_now_iso(),
+            "sensors": self._build_chart_state(registry=registry, session=session),
+        }
+
+    def history(self, *, session: Session) -> dict[str, Any]:
+        return {
+            "generated_at": utc_now_iso(),
             "history": self._build_history(session=session),
         }
 
     def _build_sensor_state(self, *, registry: EntityRegistry, session: Session) -> dict[str, Any]:
+        data: dict[str, Any] = {}
+        for sensor_id, sensor in registry.config.sensors.items():
+            latest = get_latest_sensor_metrics(session, sensor_id=sensor_id)
+            recent_history: dict[str, list[dict[str, Any]]] = {}
+            for metric_id in sensor.metrics:
+                recent_history[metric_id] = [
+                    {
+                        "ts_utc": row.ts_utc.isoformat(),
+                        "value": row.value_num if row.value_num is not None else row.value_text,
+                    }
+                    for row in get_sensor_history(session, sensor_id=sensor_id, metric=metric_id, limit=2)
+                ]
+            data[sensor_id] = {
+                "label": sensor.label,
+                "metrics": {
+                    metric_id: {
+                        "label": metric.label,
+                        "unit": metric.unit,
+                        "value": latest.get(metric_id),
+                        "previous": recent_history[metric_id][-2]["value"] if len(recent_history[metric_id]) > 1 else None,
+                    }
+                    for metric_id, metric in sensor.metrics.items()
+                },
+            }
+        return data
+
+    def _build_chart_state(self, *, registry: EntityRegistry, session: Session) -> dict[str, Any]:
         data: dict[str, Any] = {}
         for sensor_id, sensor in registry.config.sensors.items():
             latest = get_latest_sensor_metrics(session, sensor_id=sensor_id)
@@ -87,17 +131,21 @@ class GardenStateService:
 
     def _build_actuator_state(self, *, registry: EntityRegistry, session: Session) -> dict[str, Any]:
         data: dict[str, Any] = {}
+        state_service = get_actuator_state_service()
+        live_states = state_service.get_states(registry=registry, session=session)
+        decision_event = get_latest_automation_event(session, automation_id=GARDEN_AUTOMATION_ID)
         for actuator_id, actuator in registry.config.actuators.items():
             latest_event = get_latest_actuator_event(session, actuator_id=actuator_id)
             active_override = get_active_manual_override(session, actuator_id=actuator_id)
-            power = None
+            last_command_power = None
             if latest_event and isinstance(latest_event.payload_json.get("command"), dict):
-                power = latest_event.payload_json["command"].get("power")
+                last_command_power = latest_event.payload_json["command"].get("power")
+            live_state = live_states[actuator_id]
+            power = live_state.power
             badge = "auto"
             if active_override:
                 badge = "pulse" if active_override.mode == "pulse" else "manual"
             latest_decision_reason = None
-            decision_event = get_latest_automation_event(session, automation_id=GARDEN_AUTOMATION_ID)
             if decision_event and decision_event.payload_json.get("action_results"):
                 for result in reversed(decision_event.payload_json["action_results"]):
                     if result.get("actuator_id") == actuator_id:
@@ -111,8 +159,13 @@ class GardenStateService:
                 "label": actuator.label,
                 "driver": actuator.driver,
                 "power": power,
+                "state_status": live_state.state_status,
+                "state_source": live_state.state_source,
+                "last_seen_at": live_state.last_seen_at,
+                "error": live_state.error,
                 "badge": badge,
                 "last_command_at": latest_event.ts_utc.isoformat() if latest_event else None,
+                "last_command_power": last_command_power,
                 "last_reason": latest_decision_reason,
                 "override": (
                     {
@@ -181,3 +234,9 @@ class GardenStateService:
                 for row in list_recent_system_events(session, category="config", limit=20)
             ],
         }
+
+
+def utc_now_iso() -> str:
+    from growlab.shared.time import utc_now
+
+    return utc_now().isoformat()

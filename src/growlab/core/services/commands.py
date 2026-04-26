@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from growlab.core.app.dependencies import get_actuator_state_service
 from growlab.core.config.registry import EntityRegistry
 from growlab.core.db.repo_events import insert_actuator_event
 from growlab.core.drivers.registry import load_actuator_driver
@@ -34,5 +35,9 @@ class CommandService:
             event_type="command",
             status="accepted" if result.get("accepted") else "error",
             payload=result,
+        )
+        get_actuator_state_service().update_from_command_result(
+            actuator_id=actuator_id,
+            result=result,
         )
         return result

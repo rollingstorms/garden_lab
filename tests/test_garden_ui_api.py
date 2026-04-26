@@ -65,8 +65,43 @@ def seed_air_sensor(client: TestClient, *, temp: float, humidity: float) -> None
     assert response.status_code == 200
 
 
+def set_live_states(monkeypatch, power_by_actuator: dict[str, bool | None]) -> None:
+    class FakeDriver:
+        def __init__(self) -> None:
+            self._actuator_id = ""
+
+        def setup(self, config) -> None:
+            host = str(config.get("host", "")).lower()
+            if "fan" in host:
+                self._actuator_id = "exhaust_fan"
+            elif "pump" in host:
+                self._actuator_id = "water_pump"
+            elif "pads" in host:
+                self._actuator_id = "warm_pads"
+            elif "lamps" in host:
+                self._actuator_id = "lamps"
+            else:
+                self._actuator_id = ""
+
+        def get_state(self):
+            power = power_by_actuator.get(self._actuator_id)
+            if isinstance(power, bool):
+                return {
+                    "status": "ok",
+                    "state": {"power": power},
+                    "entity": {"object_id": self._actuator_id},
+                }
+            return {"status": "error", "error": "missing_test_state"}
+
+    monkeypatch.setattr(
+        "growlab.core.services.actuator_state.load_actuator_driver",
+        lambda config, driver_name: FakeDriver(),
+    )
+
+
 def test_manual_override_expiry_returns_device_to_auto(tmp_path: Path, monkeypatch) -> None:
     client, _ = build_client(tmp_path, monkeypatch)
+    set_live_states(monkeypatch, {"exhaust_fan": False})
     seed_air_sensor(client, temp=20.0, humidity=50.0)
 
     response = client.post(
@@ -100,6 +135,7 @@ def test_manual_override_expiry_returns_device_to_auto(tmp_path: Path, monkeypat
 
 def test_emergency_overrides_manual_on(tmp_path: Path, monkeypatch) -> None:
     client, _ = build_client(tmp_path, monkeypatch)
+    set_live_states(monkeypatch, {"warm_pads": False, "exhaust_fan": True})
     seed_air_sensor(client, temp=35.0, humidity=50.0)
 
     response = client.post(
@@ -228,3 +264,62 @@ def test_reset_config_restores_base_defaults(tmp_path: Path, monkeypatch) -> Non
     response = client.get("/api/garden/config")
     assert response.status_code == 200
     assert response.json()["effective"]["watering"]["schedule"]["interval_minutes"] == base_interval
+
+
+def test_fast_state_and_heavy_endpoints_are_split(tmp_path: Path, monkeypatch) -> None:
+    client, _ = build_client(tmp_path, monkeypatch)
+    set_live_states(monkeypatch, {"exhaust_fan": False, "warm_pads": True, "lamps": True, "water_pump": False})
+    seed_air_sensor(client, temp=25.0, humidity=50.0)
+
+    response = client.get("/api/garden/state")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "history" not in payload
+    assert payload["config"] == {"effective": payload["config"]["effective"]}
+
+    history_response = client.get("/api/garden/history")
+    assert history_response.status_code == 200
+    assert "history" in history_response.json()
+
+    charts_response = client.get("/api/garden/charts")
+    assert charts_response.status_code == 200
+    assert "history" in charts_response.json()["sensors"]["air_lab"]
+
+
+def test_live_state_preferred_over_last_command_and_used_by_automation(tmp_path: Path, monkeypatch) -> None:
+    client, _ = build_client(tmp_path, monkeypatch)
+    set_live_states(monkeypatch, {"warm_pads": True, "exhaust_fan": False, "lamps": True, "water_pump": False})
+    seed_air_sensor(client, temp=25.0, humidity=50.0)
+
+    session = get_session_factory()()
+    try:
+        insert_actuator_event(
+            session,
+            actuator_id="warm_pads",
+            ts_utc=utc_now(),
+            event_type="command",
+            status="accepted",
+            payload={"command": {"power": False}, "state": {"power": False}},
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    prime_response = client.get("/api/actuators/warm_pads/state")
+    assert prime_response.status_code == 200
+    assert prime_response.json()["state"]["power"] is True
+
+    response = client.get("/api/garden/state")
+    assert response.status_code == 200
+    actuator = response.json()["actuators"]["warm_pads"]
+    assert actuator["power"] is True
+    assert actuator["state_source"] == "live"
+    assert actuator["last_command_power"] is False
+
+    response = client.post("/api/automations/run")
+    assert response.status_code == 200
+
+    history_response = client.get("/api/garden/history")
+    latest = history_response.json()["history"]["decision_history"][-1]["payload"]
+    assert not [item for item in latest["action_results"] if item["actuator_id"] == "warm_pads"]
+    assert [item for item in latest["skipped_actions"] if item["actuator_id"] == "warm_pads"]

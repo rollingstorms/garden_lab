@@ -2,8 +2,12 @@ const MOBILE_BREAKPOINT = 980;
 
 const state = {
   garden: null,
+  chartsData: null,
+  historyData: null,
+  configData: null,
   activeSection: "control",
   openConfig: null,
+  optimisticActuators: {},
   temperatureUnit: window.localStorage.getItem("gardenLab.temperatureUnit") || "C",
   inspect: {
     chartId: null,
@@ -76,7 +80,36 @@ function formatApiError(payload, status) {
 
 async function loadGardenState() {
   state.garden = await fetchJson("/api/garden/state");
+  reconcileOptimisticActuators();
   render();
+}
+
+async function loadGardenCharts() {
+  state.chartsData = await fetchJson("/api/garden/charts");
+  renderCharts();
+  updateChartReadout();
+}
+
+async function loadGardenHistory() {
+  state.historyData = await fetchJson("/api/garden/history");
+  renderTimelines();
+}
+
+async function loadGardenConfig() {
+  state.configData = await fetchJson("/api/garden/config");
+  renderOverview();
+  renderConfigDiff();
+  renderConfigSummaries();
+  renderConfigPowerStates();
+  renderConfigForms();
+}
+
+async function loadHeavyState() {
+  await Promise.allSettled([
+    loadGardenCharts(),
+    loadGardenHistory(),
+    loadGardenConfig(),
+  ]);
 }
 
 function render() {
@@ -120,11 +153,12 @@ function renderEmergencyBanner() {
 function renderOverview() {
   const activeOverrides = Object.values(state.garden.actuators).filter((item) => item.override).length;
   const decision = state.garden.decision || {};
+  const diffCount = state.configData?.diff ? Object.keys(state.configData.diff).length : "…";
   els.overviewDeck.innerHTML = [
     overviewCard("Garden Mode", decision.reason === "garden_emergency" ? "Emergency" : "Balancing", humanizeReason(decision.reason || "No cycle yet")),
     overviewCard("Manual Overrides", String(activeOverrides), activeOverrides ? "Temporary manual control active" : "All systems in auto"),
     overviewCard("Last Decision", decision.decision || "Idle", decision.ts_utc ? formatTime(decision.ts_utc) : "No decision recorded"),
-    overviewCard("Config Diff", String(Object.keys(state.garden.config.diff || {}).length), "Modules diverging from base config"),
+    overviewCard("Config Diff", String(diffCount), "Modules diverging from base config"),
   ].join("");
 }
 
@@ -152,8 +186,7 @@ function renderSensors() {
   const tiles = [];
   for (const sensor of Object.values(state.garden.sensors)) {
     for (const [metricId, metric] of Object.entries(sensor.metrics)) {
-      const points = sensor.history[metricId] || [];
-      const previous = points.length > 1 ? points[points.length - 2].value : null;
+      const previous = metric.previous ?? null;
       tiles.push(`
         <article class="sensor-tile">
           <div class="sensor-tile__label">${sensor.label}</div>
@@ -169,12 +202,16 @@ function renderSensors() {
 
 function renderActuators() {
   els.actuatorGrid.innerHTML = Object.entries(state.garden.actuators)
-    .map(([actuatorId, actuator]) => renderActuatorCard(actuatorId, actuator))
+    .map(([actuatorId, actuator]) => renderActuatorCard(actuatorId, mergeActuatorState(actuatorId, actuator)))
     .join("");
 }
 
 function renderActuatorCard(actuatorId, actuator) {
-  const powerText = actuator.power === true ? "ON" : actuator.power === false ? "OFF" : "UNKNOWN";
+  const powerText = actuator.power === true ? "ON" : actuator.power === false ? "OFF" : "No Live State";
+  const lastCommandText = actuator.last_command_power === true ? "ON" : actuator.last_command_power === false ? "OFF" : "No command yet";
+  const syncText = actuator.pending
+    ? "Updating..."
+    : `${humanizeReason(actuator.state_status || "unknown")} • ${humanizeReason(actuator.state_source || "unknown")}`;
   const activeAction = currentActuatorAction(actuatorId, actuator);
   const controls = actuatorId === "water_pump"
     ? `
@@ -211,11 +248,11 @@ function renderActuatorCard(actuatorId, actuator) {
 
       <div class="device-status">
         <div class="device-value-tile">
-          <div class="device-value-label">State</div>
+          <div class="device-value-label">Actual State</div>
           <div class="device-value">${powerText}</div>
         </div>
         <div class="device-reason-tile">
-          <div class="device-reason-label">Reason</div>
+          <div class="device-reason-label">Last Reason</div>
           <div class="device-reason">${humanizeReason(actuator.last_reason || "No recent decision reason")}</div>
         </div>
       </div>
@@ -224,7 +261,11 @@ function renderActuatorCard(actuatorId, actuator) {
 
       <div class="device-card__footer">
         <span>${overrideText(actuator.override)}</span>
-        <span>${actuator.last_command_at ? formatShortTime(actuator.last_command_at) : "No command yet"}</span>
+        <span>Last command: ${lastCommandText}${actuator.last_command_at ? ` • ${formatShortTime(actuator.last_command_at)}` : ""}</span>
+      </div>
+      <div class="device-card__footer">
+        <span>${syncText}</span>
+        <span>${actuator.last_seen_at ? `Seen ${formatShortTime(actuator.last_seen_at)}` : "Awaiting live state"}</span>
       </div>
     </article>
   `;
@@ -242,10 +283,75 @@ function currentActuatorAction(actuatorId, actuator) {
   return actuatorId === "water_pump" ? "auto" : "auto";
 }
 
+function mergeActuatorState(actuatorId, actuator) {
+  return state.optimisticActuators[actuatorId]
+    ? { ...actuator, ...state.optimisticActuators[actuatorId] }
+    : actuator;
+}
+
+function reconcileOptimisticActuators() {
+  if (!state.garden) return;
+  Object.keys(state.optimisticActuators).forEach((actuatorId) => {
+    const actual = state.garden.actuators[actuatorId];
+    if (!actual) {
+      delete state.optimisticActuators[actuatorId];
+      return;
+    }
+    const pending = state.optimisticActuators[actuatorId];
+    if (!pending) return;
+    if (actual.override?.mode === pending.override?.mode || (!actual.override && !pending.override)) {
+      delete state.optimisticActuators[actuatorId];
+    }
+  });
+}
+
+function currentEffectiveConfig() {
+  return state.configData?.effective || state.garden?.config?.effective || null;
+}
+
+function optimisticActuatorState(actuatorId, actuator, button) {
+  const action = button.dataset.action;
+  if (action === "auto") {
+    return {
+      override: null,
+      badge: "auto",
+      pending: true,
+    };
+  }
+  if (action === "pulse") {
+    return {
+      power: true,
+      badge: "pulse",
+      override: {
+        mode: "pulse",
+        pulse_seconds: Number(button.dataset.seconds || "5"),
+      },
+      pending: true,
+      state_status: "pending",
+      state_source: "live",
+    };
+  }
+  return {
+    power: action === "on",
+    badge: "manual",
+    override: {
+      mode: action,
+    },
+    pending: true,
+    state_status: "pending",
+    state_source: "live",
+    last_reason: "pending_update",
+  };
+}
+
 function renderCharts() {
+  if (!state.chartsData?.sensors) {
+    els.chartGrid.innerHTML = `<article class="chart-card"><div class="chart-card__heading"><div><p class="panel-meta">History</p><h3>Loading charts</h3></div></div></article>`;
+    return;
+  }
   const defs = [];
   const cards = [];
-  for (const [sensorId, sensor] of Object.entries(state.garden.sensors)) {
+  for (const [sensorId, sensor] of Object.entries(state.chartsData.sensors)) {
     for (const [metricId, metric] of Object.entries(sensor.metrics)) {
       const points = (sensor.history[metricId] || []).filter((item) => item && item.value !== null && item.value !== undefined && !Number.isNaN(Number(item.value)));
       const chartId = `chart-${sensorId}-${metricId}`;
@@ -518,8 +624,13 @@ function clearInspect() {
 }
 
 function renderTimelines() {
+  if (!state.historyData?.history) {
+    els.decisionTimeline.innerHTML = `<p class="timeline-empty">Loading history…</p>`;
+    els.overrideTimeline.innerHTML = `<p class="timeline-empty">Loading history…</p>`;
+    return;
+  }
   els.decisionTimeline.innerHTML = renderTimelineItems(
-    state.garden.history.decision_history.map((item) => ({
+    state.historyData.history.decision_history.map((item) => ({
       title: humanizeReason(item.reason || item.decision || "Decision"),
       subtitle: `${item.decision || "control"} • ${formatTime(item.ts_utc)}`,
       detail: describeDecision(item),
@@ -527,7 +638,7 @@ function renderTimelines() {
   );
 
   els.overrideTimeline.innerHTML = renderTimelineItems(
-    state.garden.history.manual_overrides.map((item) => ({
+    state.historyData.history.manual_overrides.map((item) => ({
       title: `${labelizeActuator(item.actuator_id)} • ${item.mode}`,
       subtitle: `${item.status} • ${formatTime(item.created_at_utc)}`,
       detail: item.reason || (item.pulse_seconds ? `Pulse ${item.pulse_seconds}s` : "Manual override"),
@@ -547,14 +658,18 @@ function renderTimelineItems(items) {
 }
 
 function renderConfigDiff() {
-  els.configDiff.textContent = JSON.stringify(state.garden.config.diff, null, 2);
+  els.configDiff.textContent = state.configData
+    ? JSON.stringify(state.configData.diff, null, 2)
+    : "Loading config diff…";
 }
 
 function renderConfigSummaries() {
-  const climate = state.garden.config.effective.climate;
-  const light = state.garden.config.effective.light;
-  const watering = state.garden.config.effective.watering;
-  const emergency = state.garden.config.effective.emergency;
+  const effectiveConfig = currentEffectiveConfig();
+  if (!effectiveConfig) return;
+  const climate = effectiveConfig.climate;
+  const light = effectiveConfig.light;
+  const watering = effectiveConfig.watering;
+  const emergency = effectiveConfig.emergency;
 
   els.climateSummary.innerHTML = [
     chip("State", climate.enabled === false ? "Off" : "On"),
@@ -605,7 +720,7 @@ function renderConfigAccordions() {
 }
 
 function renderConfigPowerStates() {
-  const modules = state.garden.config.effective || {};
+  const modules = currentEffectiveConfig() || {};
   document.querySelectorAll("[data-config-power-group]").forEach((group) => {
     const module = group.dataset.configPowerGroup;
     const enabled = modules[module]?.enabled !== false;
@@ -627,7 +742,7 @@ function renderConfigForms() {
 }
 
 function renderClimateForm() {
-  const climate = state.garden.config.effective.climate;
+  const climate = currentEffectiveConfig().climate;
   renderForm({
     form: els.climateForm,
     modeKey: "climate-config",
@@ -646,7 +761,7 @@ function renderClimateForm() {
 }
 
 function renderLightForm() {
-  const light = state.garden.config.effective.light;
+  const light = currentEffectiveConfig().light;
   renderForm({
     form: els.lightForm,
     modeKey: "light-config",
@@ -661,7 +776,7 @@ function renderLightForm() {
 }
 
 function renderWateringForm() {
-  const watering = state.garden.config.effective.watering;
+  const watering = currentEffectiveConfig().watering;
   renderForm({
     form: els.wateringForm,
     modeKey: "watering-config",
@@ -684,7 +799,7 @@ function renderWateringForm() {
 }
 
 function renderEmergencyForm() {
-  const emergency = state.garden.config.effective.emergency;
+  const emergency = currentEffectiveConfig().emergency;
   const offMap = Object.fromEntries(emergency.actions.off.map((item) => [item.actuator, item.command.power === false]));
   renderForm({
     form: els.emergencyForm,
@@ -899,6 +1014,10 @@ async function handleActuatorAction(event) {
   if (!button) return;
   const actuatorId = button.dataset.actuator;
   const action = button.dataset.action;
+  const current = state.garden?.actuators?.[actuatorId];
+  if (!current) return;
+  state.optimisticActuators[actuatorId] = optimisticActuatorState(actuatorId, current, button);
+  renderActuators();
 
   try {
     if (action === "auto") {
@@ -914,6 +1033,8 @@ async function handleActuatorAction(event) {
     showToast(`Updated ${labelizeActuator(actuatorId)}`);
     await runAutomationCycle();
   } catch (error) {
+    delete state.optimisticActuators[actuatorId];
+    renderActuators();
     showToast(error.message, true);
   }
 }
@@ -942,7 +1063,8 @@ async function handleConfigSubmit(event) {
       body: JSON.stringify(payload),
     });
     showToast("Config updated");
-    await loadGardenState();
+    await fetchJson("/api/automations/run", { method: "POST" }).catch(() => {});
+    await Promise.allSettled([loadGardenState(), loadGardenConfig(), loadGardenHistory()]);
   } catch (error) {
     showToast(error.message, true);
   }
@@ -960,7 +1082,8 @@ async function handleConfigPower(event) {
       body: JSON.stringify({ enabled }),
     });
     showToast(`${labelizeActuator(module)} ${enabled ? "enabled" : "disabled"}.`);
-    await loadGardenState();
+    await fetchJson("/api/automations/run", { method: "POST" }).catch(() => {});
+    await Promise.allSettled([loadGardenState(), loadGardenConfig(), loadGardenHistory()]);
   } catch (error) {
     showToast(error.message, true);
   }
@@ -1072,7 +1195,16 @@ function bindEvents() {
 }
 
 bindEvents();
-loadGardenState().catch((error) => showToast(error.message, true));
+loadGardenState()
+  .then(() => loadHeavyState())
+  .catch((error) => showToast(error.message, true));
 setInterval(() => {
   loadGardenState().catch(() => {});
-}, 15000);
+}, 5000);
+setInterval(() => {
+  loadGardenCharts().catch(() => {});
+}, 30000);
+setInterval(() => {
+  loadGardenHistory().catch(() => {});
+  loadGardenConfig().catch(() => {});
+}, 45000);

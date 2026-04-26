@@ -6,11 +6,10 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from growlab.core.app.dependencies import get_db_session, get_registry
+from growlab.core.app.dependencies import get_actuator_state_service, get_db_session, get_registry
 from growlab.core.config.registry import EntityRegistry
 from growlab.core.db.repo_events import get_latest_actuator_event, get_latest_automation_event
 from growlab.core.db.repo_readings import get_latest_sensor_metrics, get_sensor_history
-from growlab.core.drivers.registry import load_actuator_driver
 from growlab.core.schemas.api import (
     ActuatorCommandPayload,
     ClimateConfigPatchPayload,
@@ -149,14 +148,20 @@ def actuator_state(
 ) -> dict:
     actuator = registry.get_actuator(actuator_id)
     latest_event = get_latest_actuator_event(session, actuator_id=actuator_id)
-    driver = load_actuator_driver(registry.config, actuator.driver)
-    driver.setup(actuator.config)
-    live_state = driver.get_state()
+    live_state = get_actuator_state_service().refresh_actuator(
+        registry=registry,
+        session=session,
+        actuator_id=actuator_id,
+    )
     return {
         "actuator_id": actuator_id,
         "driver": actuator.driver,
-        "state": live_state.get("state", {}),
-        "driver_state": live_state,
+        "state": {"power": live_state.power},
+        "driver_state": live_state.driver_state or {},
+        "state_status": live_state.state_status,
+        "state_source": live_state.state_source,
+        "last_seen_at": live_state.last_seen_at,
+        "error": live_state.error,
         "last_command": latest_event.payload_json.get("command", {}) if latest_event else {},
         "latest_event": {
             "event_type": latest_event.event_type,
@@ -191,6 +196,21 @@ def garden_state(
     session: Session = Depends(get_db_session),
 ) -> dict:
     return GardenStateService().snapshot(registry=registry, session=session)
+
+
+@router.get("/garden/charts")
+def garden_charts(
+    registry: EntityRegistry = Depends(get_registry),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    return GardenStateService().charts(registry=registry, session=session)
+
+
+@router.get("/garden/history")
+def garden_history(
+    session: Session = Depends(get_db_session),
+) -> dict:
+    return GardenStateService().history(session=session)
 
 
 @router.get("/garden/config")

@@ -4,7 +4,7 @@ import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from growlab.core.app.dependencies import get_registry, get_session_factory
+from growlab.core.app.dependencies import get_actuator_state_service, get_registry, get_session_factory
 from growlab.core.config.models import AppConfig
 from growlab.core.services.automation import AutomationService
 
@@ -18,6 +18,15 @@ class AutomationScheduler:
         self.automation_service = AutomationService()
 
     def start(self) -> None:
+        self.scheduler.add_job(
+            self.refresh_actuator_state_cache,
+            trigger="interval",
+            seconds=5,
+            id="actuator-state-refresh",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
         self.scheduler.add_job(
             self.run_cycle,
             trigger="interval",
@@ -48,5 +57,18 @@ class AutomationScheduler:
             logger.info("Automation cycle finished: %s", result)
         except Exception:
             logger.exception("Automation cycle failed")
+        finally:
+            session.close()
+
+    def refresh_actuator_state_cache(self) -> None:
+        session_factory = get_session_factory()
+        session = session_factory()
+        try:
+            get_actuator_state_service().refresh_all(
+                registry=get_registry(),
+                session=session,
+            )
+        except Exception:
+            logger.exception("Actuator state refresh failed")
         finally:
             session.close()

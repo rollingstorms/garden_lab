@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from growlab.core.config.loader import load_config
 from growlab.core.config.registry import EntityRegistry
 from growlab.core.db.session import build_engine, build_session_factory
+from growlab.core.services.actuator_state import ActuatorStateService
 
 
 @lru_cache(maxsize=1)
@@ -39,6 +40,11 @@ def get_session_factory():
     return build_session_factory(get_config().app)
 
 
+@lru_cache(maxsize=1)
+def get_actuator_state_service() -> ActuatorStateService:
+    return ActuatorStateService()
+
+
 def get_db_session():
     session_factory = get_session_factory()
     session: Session = session_factory()
@@ -49,6 +55,8 @@ def get_db_session():
 
 
 def reset_runtime_caches() -> None:
+    get_actuator_state_service().clear()
+    get_actuator_state_service.cache_clear()
     get_config.cache_clear()
     get_registry.cache_clear()
     get_engine.cache_clear()

@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
+from growlab.core.app.dependencies import get_actuator_state_service
 from growlab.core.config.models import ActionConfig, ConditionConfig, ConditionGroupConfig
 from growlab.core.config.registry import EntityRegistry
 from growlab.core.db.repo_events import (
@@ -239,15 +240,16 @@ class AutomationService:
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 runtime.sensors[(sensor_id, metric)] = float(value)
 
+        live_states = get_actuator_state_service().get_states(
+            registry=registry,
+            session=session,
+        )
         for actuator_id in actuator_ids:
             latest_event = get_latest_actuator_event(session, actuator_id=actuator_id)
-            power = None
+            power = live_states[actuator_id].power
             ts_utc = None
             if latest_event:
-                command = latest_event.payload_json.get("command", {})
-                if isinstance(command, dict) and isinstance(command.get("power"), bool):
-                    power = command["power"]
-                    ts_utc = latest_event.ts_utc.replace(tzinfo=timezone.utc)
+                ts_utc = latest_event.ts_utc.replace(tzinfo=timezone.utc)
             runtime.actuators[actuator_id] = ActuatorRuntimeState(
                 power=power,
                 last_changed_utc=ts_utc,
