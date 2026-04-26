@@ -1030,6 +1030,15 @@ function bindUtilityActions() {
       showToast(error.message, true);
     }
   });
+  document.getElementById("reset-config-button").addEventListener("click", async () => {
+    try {
+      await fetchJson("/api/config/garden/reset", { method: "POST" });
+      showToast("Garden config reset to defaults");
+      await loadGardenState();
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
   document.querySelectorAll("[data-temp-unit]").forEach((button) => {
     button.addEventListener("click", () => {
       if (button.dataset.tempUnit === state.temperatureUnit) return;

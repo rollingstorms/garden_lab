@@ -279,6 +279,19 @@ def patch_garden_module_enabled(
     return {"status": "ok", **result}
 
 
+@router.post("/config/garden/reset")
+def reset_garden_defaults(
+    _: bool = Depends(require_write_access),
+    session: Session = Depends(get_db_session),
+) -> dict:
+    try:
+        result = ConfigService().reset_garden_defaults(session=session)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return {"status": "ok", **result}
+
+
 @router.post("/overrides/actuators/{actuator_id}")
 def create_manual_override(
     actuator_id: str,

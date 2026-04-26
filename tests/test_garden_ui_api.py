@@ -192,3 +192,39 @@ def test_module_enabled_toggle_persists_and_disables_commands(tmp_path: Path, mo
     response = client.get("/api/garden/state")
     assert response.status_code == 200
     assert response.json()["actuators"]["lamps"]["power"] is None
+
+
+def test_reset_config_restores_base_defaults(tmp_path: Path, monkeypatch) -> None:
+    client, local_path = build_client(tmp_path, monkeypatch)
+    base_data = yaml.safe_load(Path("config/base.yaml").read_text(encoding="utf-8"))
+    base_interval = (
+        base_data["automations"]["garden_equilibrium"]["controller"]["watering"]["schedule"]["interval_minutes"]
+    )
+
+    response = client.patch(
+        "/api/config/garden/watering",
+        json={
+            "mode": "simple",
+            "watering_mode": "schedule",
+            "interval_minutes": 180,
+            "run_seconds": 45,
+            "anchor": "07:30",
+        },
+    )
+    assert response.status_code == 200
+
+    response = client.post("/api/config/garden/reset")
+    assert response.status_code == 200
+    assert response.json()["effective"]["watering"]["schedule"]["interval_minutes"] == base_interval
+
+    local_data = yaml.safe_load(local_path.read_text(encoding="utf-8")) or {}
+    controller = (
+        local_data.get("automations", {})
+        .get("garden_equilibrium", {})
+        .get("controller")
+    )
+    assert controller is None
+
+    response = client.get("/api/garden/config")
+    assert response.status_code == 200
+    assert response.json()["effective"]["watering"]["schedule"]["interval_minutes"] == base_interval

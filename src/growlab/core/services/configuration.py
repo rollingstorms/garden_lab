@@ -149,6 +149,50 @@ class ConfigService:
             "diff": _diff_dict(before_effective.get(module) or {}, after_effective.get(module) or {}),
         }
 
+    def reset_garden_defaults(self, *, session) -> dict[str, Any]:
+        base_path, local_path = get_config_paths()
+        base_data = load_yaml_file(base_path)
+        local_data = load_yaml_file(local_path)
+        before_effective = self.get_garden_config()["effective"]
+
+        local_mut = deepcopy(local_data)
+        automations = local_mut.get("automations", {})
+        automation = automations.get(GARDEN_AUTOMATION_ID, {})
+        if "controller" in automation:
+            del automation["controller"]
+        if automation == {} and GARDEN_AUTOMATION_ID in automations:
+            del automations[GARDEN_AUTOMATION_ID]
+        if automations == {} and "automations" in local_mut:
+            del local_mut["automations"]
+
+        merged = _deep_merge(base_data, local_mut)
+        validated = GrowLabConfig.model_validate(merged)
+        effective_controller = validated.automations[GARDEN_AUTOMATION_ID].controller
+        if effective_controller is None:
+            raise ValueError("Garden controller config is missing after reset")
+
+        _write_yaml(local_path, local_mut)
+        reset_runtime_caches()
+
+        after_effective = effective_controller.model_dump(mode="json")
+        insert_system_event(
+            session,
+            category="config",
+            entity_id=GARDEN_AUTOMATION_ID,
+            event_type="config_reset_defaults",
+            message="Reset garden controller overrides to defaults",
+            payload={
+                "before": before_effective,
+                "after": after_effective,
+            },
+        )
+        return {
+            "automation_id": GARDEN_AUTOMATION_ID,
+            "effective": after_effective,
+            "override": {},
+            "diff": _diff_dict(before_effective, after_effective),
+        }
+
 
 class GardenSettingsTranslator:
     def climate_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
