@@ -355,7 +355,7 @@ function optimisticActuatorState(actuatorId, actuator, button) {
 function buildActuatorSpans(events, windowStart, windowEnd) {
   const byActuator = {};
   for (const event of events) {
-    const power = event.payload?.command?.power;
+    const power = event.payload?.command?.power ?? event.payload?.state?.power;
     if (typeof power !== "boolean") continue;
     if (!byActuator[event.actuator_id]) byActuator[event.actuator_id] = [];
     byActuator[event.actuator_id].push({ ts: new Date(event.ts_utc).getTime(), power });
@@ -364,8 +364,13 @@ function buildActuatorSpans(events, windowStart, windowEnd) {
   for (const [actuatorId, evts] of Object.entries(byActuator)) {
     const sorted = [...evts].sort((a, b) => a.ts - b.ts);
     spans[actuatorId] = [];
-    let onStart = null;
-    for (const evt of sorted) {
+    // If the oldest event in our window is "off", the device may have been on before the window.
+    // Peek at the last event *before* windowStart to seed the initial state.
+    const beforeWindow = sorted.filter((e) => e.ts < windowStart);
+    const inWindow = sorted.filter((e) => e.ts >= windowStart);
+    const seedPower = beforeWindow.length ? beforeWindow[beforeWindow.length - 1].power : null;
+    let onStart = seedPower === true ? windowStart : null;
+    for (const evt of inWindow) {
       if (evt.power && onStart === null) {
         onStart = evt.ts;
       } else if (!evt.power && onStart !== null) {

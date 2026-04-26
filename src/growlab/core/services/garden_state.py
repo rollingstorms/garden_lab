@@ -201,7 +201,7 @@ class GardenStateService:
                 "status": row.status,
                 "payload": row.payload_json,
             }
-            for row in list_recent_actuator_events(session, limit=100)
+            for row in list_recent_actuator_events(session, limit=500)
         ]
         return {
             "decision_history": decision_history,
