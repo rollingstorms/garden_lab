@@ -832,10 +832,14 @@ button {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .sensor-strip,
   .device-grid,
   .chart-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sensor-strip {
+    grid-template-columns: repeat(2, minmax(0, 220px));
+    justify-content: start;
   }
 
   .overview-deck {
@@ -893,10 +897,14 @@ button {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .sensor-strip,
   .device-grid,
   .chart-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .sensor-strip {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 220px));
+    justify-content: start;
   }
 
   .config-stack {
@@ -910,9 +918,13 @@ button {
     justify-content: start;
   }
 
-  .sensor-strip,
   .device-grid,
   .chart-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .sensor-strip {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 210px));
+    justify-content: start;
   }
 }

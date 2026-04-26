@@ -143,20 +143,20 @@ automations:
           bands:
             - sensor: air_lab
               metric: temperature_c
-              on_below: 20.0
-              off_above: 22.0
+              on_below: 34.0
+              off_above: 34.0
       light:
         actuator: lamps
         schedule:
-          start: "06:00"
+          start: "06:45"
           end: "22:00"
       watering:
         actuator: water_pump
         mode: schedule
         schedule:
-          interval_minutes: 720
-          run_seconds: 90
-          anchor: "06:00"
+          interval_minutes: 1440
+          run_seconds: 10
+          anchor: "06:55"
       emergency:
         when:
           any:
