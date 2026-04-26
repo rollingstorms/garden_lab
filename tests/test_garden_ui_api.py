@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from growlab.core.app.dependencies import get_session_factory, reset_runtime_caches
 from growlab.core.app.main import create_app
+from growlab.core.db.repo_actuator_state_history import insert_actuator_state_history
 from growlab.core.db.repo_events import insert_actuator_event
 from growlab.core.db.repo_overrides import list_manual_overrides
 from growlab.shared.time import utc_now
@@ -26,6 +27,7 @@ def build_client(tmp_path: Path, monkeypatch) -> tuple[TestClient, Path]:
     reset_runtime_caches()
 
     def fake_issue_command(self, *, registry, session, actuator_id, payload):
+        now = utc_now()
         result = {
             "accepted": True,
             "actuator_id": actuator_id,
@@ -36,11 +38,22 @@ def build_client(tmp_path: Path, monkeypatch) -> tuple[TestClient, Path]:
         insert_actuator_event(
             session,
             actuator_id=actuator_id,
-            ts_utc=utc_now(),
+            ts_utc=now,
             event_type="command",
             status="accepted",
             payload=result,
         )
+        power = payload.command.get("power")
+        if isinstance(power, bool):
+            insert_actuator_state_history(
+                session,
+                actuator_id=actuator_id,
+                ts_utc=now,
+                power=power,
+                source="command_confirmed",
+                quality="confirmed",
+                observed_vs_commanded=True,
+            )
         return result
 
     monkeypatch.setattr(
@@ -417,3 +430,83 @@ def test_garden_charts_downsamples_large_series(tmp_path: Path, monkeypatch) -> 
     payload = response.json()
     assert len(payload["sensors"]["air_lab"]["history"]["temperature_c"]) <= 240
     assert len(payload["sensors"]["air_lab"]["history"]["humidity_pct"]) <= 240
+
+
+def test_actuator_timeline_uses_persisted_state_history(tmp_path: Path, monkeypatch) -> None:
+    client, _ = build_client(tmp_path, monkeypatch)
+
+    session = get_session_factory()()
+    try:
+        now = utc_now()
+        insert_actuator_state_history(
+            session,
+            actuator_id="lamps",
+            ts_utc=now - timedelta(hours=10),
+            power=True,
+            source="live_poll",
+        )
+        insert_actuator_state_history(
+            session,
+            actuator_id="lamps",
+            ts_utc=now - timedelta(hours=8),
+            power=False,
+            source="live_poll",
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    response = client.get("/api/garden/history?hours=24")
+    assert response.status_code == 200
+    timeline = response.json()["history"]["actuator_state_timeline"]["actuators"]["lamps"]
+    assert timeline["has_history"] is True
+    assert timeline["partial"] is True
+    assert len(timeline["spans"]) == 1
+
+
+def test_actuator_timeline_seeds_from_state_before_window(tmp_path: Path, monkeypatch) -> None:
+    client, _ = build_client(tmp_path, monkeypatch)
+
+    session = get_session_factory()()
+    try:
+        now = utc_now()
+        insert_actuator_state_history(
+            session,
+            actuator_id="lamps",
+            ts_utc=now - timedelta(hours=30),
+            power=True,
+            source="live_poll",
+        )
+        insert_actuator_state_history(
+            session,
+            actuator_id="lamps",
+            ts_utc=now - timedelta(hours=2),
+            power=False,
+            source="live_poll",
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    response = client.get("/api/garden/history?hours=24")
+    assert response.status_code == 200
+    payload = response.json()["history"]["actuator_state_timeline"]
+    timeline = payload["actuators"]["lamps"]
+    assert timeline["partial"] is False
+    assert timeline["has_history"] is True
+    assert len(timeline["spans"]) == 1
+    assert timeline["spans"][0]["start"] == payload["window_start_utc"]
+
+
+def test_refresh_persists_observed_actuator_state_history(tmp_path: Path, monkeypatch) -> None:
+    client, _ = build_client(tmp_path, monkeypatch)
+    set_live_states(monkeypatch, {"lamps": True})
+
+    response = client.get("/api/actuators/lamps/state")
+    assert response.status_code == 200
+
+    response = client.get("/api/garden/history?hours=24")
+    assert response.status_code == 200
+    timeline = response.json()["history"]["actuator_state_timeline"]["actuators"]["lamps"]
+    assert timeline["has_history"] is True
+    assert len(timeline["spans"]) == 1

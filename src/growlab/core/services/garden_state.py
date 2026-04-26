@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from growlab.core.app.dependencies import get_actuator_state_service
 from growlab.core.config.registry import EntityRegistry
+from growlab.core.db.repo_actuator_state_history import list_actuator_state_history_window
 from growlab.core.db.repo_events import (
     get_latest_actuator_events,
     get_latest_automation_event,
@@ -227,6 +228,7 @@ class GardenStateService:
             }
             for row in list_recent_actuator_events(session, hours=hours, limit=500)
         ]
+        timeline = self._build_actuator_timeline(session=session, hours=hours)
         return {
             "decision_history": decision_history,
             "manual_overrides": [
@@ -248,6 +250,7 @@ class GardenStateService:
                 for item in decision_history
                 if item["reason"] == "garden_emergency"
             ],
+            "actuator_state_timeline": timeline,
             "config_events": [
                 {
                     "ts_utc": row.ts_utc.isoformat(),
@@ -259,6 +262,58 @@ class GardenStateService:
             ],
         }
 
+    def _build_actuator_timeline(self, *, session: Session, hours: int) -> dict[str, Any]:
+        from growlab.core.app.dependencies import get_registry
+
+        actuator_ids = list(get_registry().config.actuators.keys())
+        seeds, history_rows, window_start, window_end = list_actuator_state_history_window(
+            session,
+            actuator_ids=actuator_ids,
+            hours=hours,
+        )
+        actuators: dict[str, Any] = {}
+        for actuator_id in actuator_ids:
+            seed = seeds.get(actuator_id)
+            rows = history_rows.get(actuator_id, [])
+            spans: list[dict[str, Any]] = []
+            current_power = seed.power if seed is not None else None
+            current_start = window_start if current_power is True else None
+            partial = seed is None
+            has_history = seed is not None or bool(rows)
+            for row in rows:
+                ts = _coerce_aware(row.ts_utc)
+                if row.power is True:
+                    if current_power is not True:
+                        current_start = ts
+                elif current_power is True and current_start is not None:
+                    spans.append(
+                        {
+                            "start": current_start.isoformat(),
+                            "end": ts.isoformat(),
+                        }
+                    )
+                    current_start = None
+                current_power = row.power
+            if current_power is True and current_start is not None:
+                spans.append(
+                    {
+                        "start": current_start.isoformat(),
+                        "end": window_end.isoformat(),
+                    }
+                )
+            actuators[actuator_id] = {
+                "spans": spans,
+                "partial": partial,
+                "has_history": has_history,
+                "seed_power": seed.power if seed is not None else None,
+                "last_known_power": current_power,
+            }
+        return {
+            "window_start_utc": window_start.isoformat(),
+            "window_end_utc": window_end.isoformat(),
+            "actuators": actuators,
+        }
+
 
 def utc_now_iso() -> str:
     from growlab.shared.time import utc_now
@@ -268,6 +323,12 @@ def utc_now_iso() -> str:
 
 def _reading_value(row) -> Any:
     return row.value_num if row.value_num is not None else row.value_text
+
+
+def _coerce_aware(value):
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
 
 
 def _downsample_series(points: list[dict[str, Any]], *, max_points: int) -> list[dict[str, Any]]:

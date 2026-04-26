@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, Float, Index, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Float, Index, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from growlab.shared.time import utc_now
@@ -53,6 +53,21 @@ class ActuatorEvent(Base):
     event_type: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(64))
     payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class ActuatorStateHistory(Base):
+    __tablename__ = "actuator_state_history"
+    __table_args__ = (
+        Index("ix_actuator_state_history_actuator_ts", "actuator_id", "ts_utc"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    actuator_id: Mapped[str] = mapped_column(String(120), index=True)
+    ts_utc: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    power: Mapped[bool] = mapped_column(Boolean)
+    source: Mapped[str] = mapped_column(String(64), index=True)
+    quality: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    observed_vs_commanded: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
 
 class AutomationEvent(Base):

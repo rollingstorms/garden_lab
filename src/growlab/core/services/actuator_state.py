@@ -7,6 +7,7 @@ from typing import Any, Optional
 from sqlalchemy.orm import Session
 
 from growlab.core.config.registry import EntityRegistry
+from growlab.core.db.repo_actuator_state_history import get_latest_actuator_state_history, insert_actuator_state_history
 from growlab.core.db.repo_events import get_latest_actuator_event
 from growlab.core.drivers.registry import load_actuator_driver
 from growlab.shared.time import utc_now
@@ -66,16 +67,27 @@ class ActuatorStateService:
         registry: EntityRegistry,
         session: Session,
         actuator_id: str,
+        history_source: str = "live_refresh",
     ) -> ActuatorStateSnapshot:
         actuator = registry.get_actuator(actuator_id)
         driver = load_actuator_driver(registry.config, actuator.driver)
         driver.setup(actuator.config)
 
         result = driver.get_state()
-        now_iso = utc_now().isoformat()
+        now = utc_now()
+        now_iso = now.isoformat()
         previous = self._cache.get(actuator_id)
         power = result.get("state", {}).get("power")
         if result.get("status") == "ok" and isinstance(power, bool):
+            self._persist_state_if_changed(
+                session=session,
+                actuator_id=actuator_id,
+                ts_utc=now,
+                power=power,
+                source=history_source,
+                quality="observed",
+                observed_vs_commanded=None,
+            )
             snapshot = ActuatorStateSnapshot(
                 actuator_id=actuator_id,
                 power=power,
@@ -100,7 +112,7 @@ class ActuatorStateService:
             snapshot = ActuatorStateSnapshot(
                 actuator_id=actuator_id,
                 power=fallback.power,
-                state_status="fallback" if fallback.state_source == "fallback_event" else "unknown",
+                state_status="fallback" if fallback.state_source in {"fallback_event", "history"} else "unknown",
                 state_source=fallback.state_source,
                 last_seen_at=fallback.last_seen_at,
                 error=result.get("error"),
@@ -122,6 +134,7 @@ class ActuatorStateService:
                 registry=registry,
                 session=session,
                 actuator_id=actuator_id,
+                history_source="live_poll",
             )
             for actuator_id in registry.config.actuators
         }
@@ -153,6 +166,15 @@ class ActuatorStateService:
         session: Session,
         actuator_id: str,
     ) -> ActuatorStateSnapshot:
+        latest_history = get_latest_actuator_state_history(session, actuator_id=actuator_id)
+        if latest_history is not None:
+            return ActuatorStateSnapshot(
+                actuator_id=actuator_id,
+                power=latest_history.power,
+                state_status="fallback",
+                state_source="history",
+                last_seen_at=latest_history.ts_utc.isoformat(),
+            )
         latest_event = get_latest_actuator_event(session, actuator_id=actuator_id)
         power = None
         ts_utc = None
@@ -175,4 +197,28 @@ class ActuatorStateService:
             state_status="unknown",
             state_source="unknown",
             last_seen_at=None,
+        )
+
+    def _persist_state_if_changed(
+        self,
+        *,
+        session: Session,
+        actuator_id: str,
+        ts_utc,
+        power: bool,
+        source: str,
+        quality: Optional[str],
+        observed_vs_commanded: Optional[bool],
+    ) -> None:
+        latest_history = get_latest_actuator_state_history(session, actuator_id=actuator_id)
+        if latest_history is not None and latest_history.power is power:
+            return
+        insert_actuator_state_history(
+            session,
+            actuator_id=actuator_id,
+            ts_utc=ts_utc,
+            power=power,
+            source=source,
+            quality=quality,
+            observed_vs_commanded=observed_vs_commanded,
         )

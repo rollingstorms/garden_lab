@@ -76,7 +76,10 @@ class AutomationScheduler:
                 registry=get_registry(),
                 session=session,
             )
+            session.commit()
+            get_dashboard_response_cache().invalidate_prefix(("garden",))
         except Exception:
+            session.rollback()
             logger.exception("Actuator state refresh failed")
         finally:
             session.close()

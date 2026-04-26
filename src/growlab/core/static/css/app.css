@@ -759,6 +759,10 @@ button {
   font-size: 0.84rem;
 }
 
+.timeline-empty--canvas {
+  margin: 0 0 0.75rem;
+}
+
 .form-actions {
   position: sticky;
   bottom: 0;

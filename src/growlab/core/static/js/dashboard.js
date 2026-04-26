@@ -54,6 +54,7 @@ const els = {
   chartReadout: document.getElementById("hover-readout"),
   decisionTimeline: document.getElementById("decision-timeline"),
   overrideTimeline: document.getElementById("override-timeline"),
+  actuatorTimelineEmpty: document.getElementById("actuator-timeline-empty"),
   configDiff: document.getElementById("config-diff"),
   climateForm: document.getElementById("climate-form"),
   lightForm: document.getElementById("light-form"),
@@ -138,6 +139,7 @@ function ensureSectionData(section) {
     const tasks = [];
     if (!state.chartsData) tasks.push(loadGardenCharts());
     if (!state.historyData) tasks.push(loadGardenHistory());
+    requestAnimationFrame(() => requestAnimationFrame(() => drawActuatorTimeline()));
     return Promise.allSettled(tasks);
   }
   if (section === "config" && !state.configData) {
@@ -378,53 +380,25 @@ function optimisticActuatorState(actuatorId, actuator, button) {
   };
 }
 
-function buildActuatorSpans(events, windowStart, windowEnd) {
-  const byActuator = {};
-  for (const event of events) {
-    const power = event.payload?.command?.power ?? event.payload?.state?.power;
-    if (typeof power !== "boolean") continue;
-    if (!byActuator[event.actuator_id]) byActuator[event.actuator_id] = [];
-    byActuator[event.actuator_id].push({ ts: new Date(event.ts_utc).getTime(), power });
-  }
-  const spans = {};
-  for (const [actuatorId, evts] of Object.entries(byActuator)) {
-    const sorted = [...evts].sort((a, b) => a.ts - b.ts);
-    spans[actuatorId] = [];
-    // If the oldest event in our window is "off", the device may have been on before the window.
-    // Peek at the last event *before* windowStart to seed the initial state.
-    const beforeWindow = sorted.filter((e) => e.ts < windowStart);
-    const inWindow = sorted.filter((e) => e.ts >= windowStart);
-    const seedPower = beforeWindow.length ? beforeWindow[beforeWindow.length - 1].power : null;
-    let onStart = seedPower === true ? windowStart : null;
-    for (const evt of inWindow) {
-      if (evt.power && onStart === null) {
-        onStart = evt.ts;
-      } else if (!evt.power && onStart !== null) {
-        spans[actuatorId].push({ start: onStart, end: evt.ts });
-        onStart = null;
-      }
-    }
-    if (onStart !== null) {
-      spans[actuatorId].push({ start: onStart, end: windowEnd });
-    }
-  }
-  return spans;
-}
-
 function drawActuatorTimeline() {
   const canvas = els.actuatorTimeline;
   if (!canvas) return;
+  const section = canvas.closest("[data-section]");
+  if (section && !section.classList.contains("is-active")) return;
   const ctx = canvas.getContext("2d");
   const actuatorOrder = state.garden ? Object.keys(state.garden.actuators) : Object.keys(ACTUATOR_COLORS);
   const labels = state.garden
     ? Object.fromEntries(Object.entries(state.garden.actuators).map(([id, a]) => [id, a.label]))
     : {};
 
-  const events = state.historyData?.history?.actuator_events || [];
-  const now = Date.now();
-  const windowStart = now - state.chartHours * 60 * 60 * 1000;
-  const windowEnd = now;
-  const spans = buildActuatorSpans(events, windowStart, windowEnd);
+  const timeline = state.historyData?.history?.actuator_state_timeline || null;
+  const timelineActuators = timeline?.actuators || {};
+  const windowStart = timeline ? new Date(timeline.window_start_utc).getTime() : Date.now() - state.chartHours * 60 * 60 * 1000;
+  const windowEnd = timeline ? new Date(timeline.window_end_utc).getTime() : Date.now();
+  const hasAnyHistory = Object.values(timelineActuators).some((item) => item?.has_history);
+  if (els.actuatorTimelineEmpty) {
+    els.actuatorTimelineEmpty.hidden = hasAnyHistory;
+  }
 
   const ROW_H = 24;
   const ROW_GAP = 5;
@@ -453,14 +427,29 @@ function drawActuatorTimeline() {
     ctx.fill();
 
     ctx.fillStyle = color;
-    for (const span of (spans[actuatorId] || [])) {
-      const cs = Math.max(span.start, windowStart);
-      const ce = Math.min(span.end, windowEnd);
+    const actuatorTimeline = timelineActuators[actuatorId] || { spans: [], partial: true, has_history: false };
+    for (const span of (actuatorTimeline.spans || [])) {
+      const cs = Math.max(new Date(span.start).getTime(), windowStart);
+      const ce = Math.min(new Date(span.end).getTime(), windowEnd);
       if (ce <= cs) continue;
       const x = LABEL_W + ((cs - windowStart) / timeRange) * barW;
       const w = Math.max(2, ((ce - cs) / timeRange) * barW);
       roundRect(ctx, x, y, w, ROW_H, 4);
       ctx.fill();
+    }
+
+    if (!actuatorTimeline.has_history) {
+      ctx.fillStyle = "#6f8479";
+      ctx.font = "10px system-ui, sans-serif";
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
+      ctx.fillText("No history", LABEL_W + barW / 2, y + ROW_H / 2);
+    } else if (actuatorTimeline.partial) {
+      ctx.strokeStyle = "rgba(234, 179, 8, 0.55)";
+      ctx.setLineDash([4, 3]);
+      roundRect(ctx, LABEL_W + 1, y + 1, Math.max(barW - 2, 0), Math.max(ROW_H - 2, 0), 4);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     ctx.fillStyle = "#92b09d";
@@ -499,6 +488,7 @@ function drawActuatorTimeline() {
 function renderCharts() {
   if (!state.chartsData?.sensors) {
     els.chartGrid.innerHTML = `<article class="chart-card"><div class="chart-card__heading"><div><p class="panel-meta">History</p><h3>Loading charts</h3></div></div></article>`;
+    drawActuatorTimeline();
     return;
   }
   const defs = [];
@@ -543,6 +533,7 @@ function renderCharts() {
     attachChartListeners(canvas, def);
     drawSeries(canvas, def);
   });
+  requestAnimationFrame(() => drawActuatorTimeline());
 }
 
 function attachChartListeners(canvas, def) {
@@ -1258,6 +1249,9 @@ function bindSectionTabs() {
       state.activeSection = button.dataset.sectionTab;
       syncSectionVisibility();
       ensureSectionData(state.activeSection).catch(() => {});
+      if (state.activeSection === "charts") {
+        requestAnimationFrame(() => requestAnimationFrame(() => drawActuatorTimeline()));
+      }
     });
   });
 }

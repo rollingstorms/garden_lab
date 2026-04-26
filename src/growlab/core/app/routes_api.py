@@ -165,6 +165,8 @@ def actuator_state(
         session=session,
         actuator_id=actuator_id,
     )
+    session.commit()
+    invalidate_dashboard_caches()
     return {
         "actuator_id": actuator_id,
         "driver": actuator.driver,
