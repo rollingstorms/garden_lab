@@ -609,6 +609,11 @@ button {
   cursor: crosshair;
 }
 
+.chart-card--timeline canvas {
+  height: auto;
+  cursor: default;
+}
+
 .config-card {
   background:
     radial-gradient(circle at top right, rgba(110, 240, 165, 0.05), transparent 26%),

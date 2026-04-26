@@ -1,5 +1,12 @@
 const MOBILE_BREAKPOINT = 980;
 
+const ACTUATOR_COLORS = {
+  exhaust_fan: "#22c55e",
+  lamps: "#eab308",
+  warm_pads: "#ef4444",
+  water_pump: "#3b82f6",
+};
+
 const state = {
   garden: null,
   chartsData: null,
@@ -30,6 +37,7 @@ const els = {
   sensorStrip: document.getElementById("sensor-strip"),
   actuatorGrid: document.getElementById("actuator-grid"),
   chartGrid: document.getElementById("chart-grid"),
+  actuatorTimeline: document.getElementById("actuator-timeline"),
   chartReadout: document.getElementById("hover-readout"),
   decisionTimeline: document.getElementById("decision-timeline"),
   overrideTimeline: document.getElementById("override-timeline"),
@@ -344,6 +352,116 @@ function optimisticActuatorState(actuatorId, actuator, button) {
   };
 }
 
+function buildActuatorSpans(events, windowStart, windowEnd) {
+  const byActuator = {};
+  for (const event of events) {
+    const power = event.payload?.command?.power;
+    if (typeof power !== "boolean") continue;
+    if (!byActuator[event.actuator_id]) byActuator[event.actuator_id] = [];
+    byActuator[event.actuator_id].push({ ts: new Date(event.ts_utc).getTime(), power });
+  }
+  const spans = {};
+  for (const [actuatorId, evts] of Object.entries(byActuator)) {
+    const sorted = [...evts].sort((a, b) => a.ts - b.ts);
+    spans[actuatorId] = [];
+    let onStart = null;
+    for (const evt of sorted) {
+      if (evt.power && onStart === null) {
+        onStart = evt.ts;
+      } else if (!evt.power && onStart !== null) {
+        spans[actuatorId].push({ start: onStart, end: evt.ts });
+        onStart = null;
+      }
+    }
+    if (onStart !== null) {
+      spans[actuatorId].push({ start: onStart, end: windowEnd });
+    }
+  }
+  return spans;
+}
+
+function drawActuatorTimeline() {
+  const canvas = els.actuatorTimeline;
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const actuatorOrder = state.garden ? Object.keys(state.garden.actuators) : Object.keys(ACTUATOR_COLORS);
+  const labels = state.garden
+    ? Object.fromEntries(Object.entries(state.garden.actuators).map(([id, a]) => [id, a.label]))
+    : {};
+
+  const events = state.historyData?.history?.actuator_events || [];
+  const now = Date.now();
+  const windowStart = now - 24 * 60 * 60 * 1000;
+  const windowEnd = now;
+  const spans = buildActuatorSpans(events, windowStart, windowEnd);
+
+  const ROW_H = 24;
+  const ROW_GAP = 5;
+  const LABEL_W = 90;
+  const PAD_TOP = 10;
+  const PAD_BOT = 20;
+  const cssWidth = canvas.parentElement?.clientWidth || 420;
+  const totalH = PAD_TOP + actuatorOrder.length * (ROW_H + ROW_GAP) - ROW_GAP + PAD_BOT;
+
+  canvas.width = cssWidth;
+  canvas.height = totalH;
+  canvas.style.width = cssWidth + "px";
+  canvas.style.height = totalH + "px";
+
+  ctx.clearRect(0, 0, cssWidth, totalH);
+  const barW = cssWidth - LABEL_W - 8;
+  const timeRange = windowEnd - windowStart;
+
+  for (let i = 0; i < actuatorOrder.length; i++) {
+    const actuatorId = actuatorOrder[i];
+    const y = PAD_TOP + i * (ROW_H + ROW_GAP);
+    const color = ACTUATOR_COLORS[actuatorId] || "#666";
+
+    ctx.fillStyle = "rgba(255,255,255,0.04)";
+    roundRect(ctx, LABEL_W, y, barW, ROW_H, 4);
+    ctx.fill();
+
+    ctx.fillStyle = color;
+    for (const span of (spans[actuatorId] || [])) {
+      const cs = Math.max(span.start, windowStart);
+      const ce = Math.min(span.end, windowEnd);
+      if (ce <= cs) continue;
+      const x = LABEL_W + ((cs - windowStart) / timeRange) * barW;
+      const w = Math.max(2, ((ce - cs) / timeRange) * barW);
+      roundRect(ctx, x, y, w, ROW_H, 4);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "#92b09d";
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.fillText(labels[actuatorId] || actuatorId, 0, y + ROW_H / 2);
+  }
+
+  const ticks = 4;
+  for (let t = 0; t <= ticks; t++) {
+    const ratio = t / ticks;
+    const x = LABEL_W + ratio * barW;
+    ctx.strokeStyle = "rgba(172, 229, 197, 0.1)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, PAD_TOP);
+    ctx.lineTo(x, PAD_TOP + actuatorOrder.length * (ROW_H + ROW_GAP) - ROW_GAP);
+    ctx.stroke();
+    const d = new Date(windowStart + ratio * timeRange);
+    ctx.fillStyle = "#555";
+    ctx.font = "9px system-ui, sans-serif";
+    ctx.textBaseline = "top";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
+      x,
+      PAD_TOP + actuatorOrder.length * (ROW_H + ROW_GAP) - ROW_GAP + 4,
+    );
+  }
+}
+
 function renderCharts() {
   if (!state.chartsData?.sensors) {
     els.chartGrid.innerHTML = `<article class="chart-card"><div class="chart-card__heading"><div><p class="panel-meta">History</p><h3>Loading charts</h3></div></div></article>`;
@@ -458,6 +576,7 @@ function redrawAllCharts() {
     const canvas = document.getElementById(def.chartId);
     if (canvas) drawSeries(canvas, def);
   });
+  drawActuatorTimeline();
 }
 
 function drawSeries(canvas, def) {
@@ -644,6 +763,7 @@ function renderTimelines() {
       detail: item.reason || (item.pulse_seconds ? `Pulse ${item.pulse_seconds}s` : "Manual override"),
     })),
   );
+  drawActuatorTimeline();
 }
 
 function renderTimelineItems(items) {
@@ -1196,7 +1316,11 @@ function bindEvents() {
 
 bindEvents();
 loadGardenState()
-  .then(() => loadHeavyState())
+  .then(() => {
+    setTimeout(() => loadGardenCharts().catch(() => {}), 200);
+    setTimeout(() => loadGardenHistory().catch(() => {}), 600);
+    setTimeout(() => loadGardenConfig().catch(() => {}), 1000);
+  })
   .catch((error) => showToast(error.message, true));
 setInterval(() => {
   loadGardenState().catch(() => {});
@@ -1208,3 +1332,9 @@ setInterval(() => {
   loadGardenHistory().catch(() => {});
   loadGardenConfig().catch(() => {});
 }, 45000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  loadGardenState().catch(() => {});
+  loadGardenCharts().catch(() => {});
+  loadGardenHistory().catch(() => {});
+});
