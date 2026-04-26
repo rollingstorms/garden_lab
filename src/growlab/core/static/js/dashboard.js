@@ -53,9 +53,25 @@ async function fetchJson(url, options = {}) {
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.detail || `Request failed: ${response.status}`);
+    throw new Error(formatApiError(payload, response.status));
   }
   return response.json();
+}
+
+function formatApiError(payload, status) {
+  const detail = payload?.detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        const path = Array.isArray(item?.loc) ? item.loc.slice(1).join(" > ") : "field";
+        const message = item?.msg || "Invalid value";
+        return `${path}: ${message}`;
+      })
+      .join(" | ");
+  }
+  if (typeof detail === "string" && detail) return detail;
+  return `Request failed: ${status}`;
 }
 
 async function loadGardenState() {
