@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import desc, select
@@ -68,11 +68,14 @@ def list_recent_actuator_events(
     session: Session,
     *,
     actuator_id: Optional[str] = None,
-    limit: int = 100,
+    hours: int = 24,
+    limit: int = 500,
 ) -> list[ActuatorEvent]:
-    stmt = select(ActuatorEvent).order_by(desc(ActuatorEvent.ts_utc), ActuatorEvent.id.desc()).limit(limit)
+    since = utc_now() - timedelta(hours=hours)
+    stmt = select(ActuatorEvent).where(ActuatorEvent.ts_utc >= since)
     if actuator_id:
         stmt = stmt.where(ActuatorEvent.actuator_id == actuator_id)
+    stmt = stmt.order_by(desc(ActuatorEvent.ts_utc), ActuatorEvent.id.desc()).limit(limit)
     return list(reversed(session.execute(stmt).scalars().all()))
 
 

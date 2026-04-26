@@ -68,6 +68,10 @@
             <p class="panel-meta">History</p>
             <h2>Trend Surface</h2>
           </div>
+          <button class="range-pill" id="range-picker-btn" type="button" aria-haspopup="dialog" aria-label="Select time range">
+            <span id="range-pill-label">6h</span>
+            <span class="range-pill-caret" aria-hidden="true">&#8597;</span>
+          </button>
         </div>
         <div class="chart-readout-card" id="chart-readout-card">
           <div class="chart-readout-card__label">Chart Inspect</div>
@@ -233,6 +237,22 @@
   </footer>
 
   <div class="toast-stack" id="toast-stack"></div>
+
+  <div class="drum-sheet" id="drum-sheet" hidden role="dialog" aria-modal="true" aria-label="Select time range">
+    <div class="drum-sheet__backdrop"></div>
+    <div class="drum-sheet__content">
+      <div class="drum-sheet__header">
+        <span class="drum-sheet__title">Time Range</span>
+        <button class="drum-done-btn" type="button">Done</button>
+      </div>
+      <div class="drum-container">
+        <div class="drum-fade drum-fade--top"></div>
+        <div class="drum-scroll" id="drum-scroll"></div>
+        <div class="drum-fade drum-fade--bot"></div>
+        <div class="drum-highlight"></div>
+      </div>
+    </div>
+  </div>
 </main>
 
 <script type="module" src="/static/js/dashboard.js"></script>

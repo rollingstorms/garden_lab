@@ -200,17 +200,27 @@ def garden_state(
 
 @router.get("/garden/charts")
 def garden_charts(
+    hours: int = 24,
     registry: EntityRegistry = Depends(get_registry),
     session: Session = Depends(get_db_session),
 ) -> dict:
-    return GardenStateService().charts(registry=registry, session=session)
+    if hours < 1:
+        hours = 1
+    if hours > 168:
+        hours = 168
+    return GardenStateService().charts(registry=registry, session=session, hours=hours)
 
 
 @router.get("/garden/history")
 def garden_history(
+    hours: int = 24,
     session: Session = Depends(get_db_session),
 ) -> dict:
-    return GardenStateService().history(session=session)
+    if hours < 1:
+        hours = 1
+    if hours > 168:
+        hours = 168
+    return GardenStateService().history(session=session, hours=hours)
 
 
 @router.get("/garden/config")

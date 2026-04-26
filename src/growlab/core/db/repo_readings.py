@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Union
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from growlab.core.db.models import SensorReading
+from growlab.shared.time import utc_now
 
 
 def insert_sensor_metrics(
@@ -59,11 +60,17 @@ def get_sensor_history(
     *,
     sensor_id: str,
     metric: str,
-    limit: int = 200,
+    hours: int = 24,
+    limit: int = 2000,
 ) -> list[SensorReading]:
+    since = utc_now() - timedelta(hours=hours)
     stmt = (
         select(SensorReading)
-        .where(SensorReading.sensor_id == sensor_id, SensorReading.metric == metric)
+        .where(
+            SensorReading.sensor_id == sensor_id,
+            SensorReading.metric == metric,
+            SensorReading.ts_utc >= since,
+        )
         .order_by(desc(SensorReading.ts_utc), SensorReading.id.desc())
         .limit(limit)
     )

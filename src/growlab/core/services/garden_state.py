@@ -63,16 +63,19 @@ class GardenStateService:
         *,
         registry: EntityRegistry,
         session: Session,
+        hours: int = 24,
     ) -> dict[str, Any]:
         return {
             "generated_at": utc_now_iso(),
-            "sensors": self._build_chart_state(registry=registry, session=session),
+            "hours": hours,
+            "sensors": self._build_chart_state(registry=registry, session=session, hours=hours),
         }
 
-    def history(self, *, session: Session) -> dict[str, Any]:
+    def history(self, *, session: Session, hours: int = 24) -> dict[str, Any]:
         return {
             "generated_at": utc_now_iso(),
-            "history": self._build_history(session=session),
+            "hours": hours,
+            "history": self._build_history(session=session, hours=hours),
         }
 
     def _build_sensor_state(self, *, registry: EntityRegistry, session: Session) -> dict[str, Any]:
@@ -102,8 +105,9 @@ class GardenStateService:
             }
         return data
 
-    def _build_chart_state(self, *, registry: EntityRegistry, session: Session) -> dict[str, Any]:
+    def _build_chart_state(self, *, registry: EntityRegistry, session: Session, hours: int = 24) -> dict[str, Any]:
         data: dict[str, Any] = {}
+        limit = min(hours * 60 + 60, 1500)
         for sensor_id, sensor in registry.config.sensors.items():
             latest = get_latest_sensor_metrics(session, sensor_id=sensor_id)
             history = {}
@@ -113,7 +117,7 @@ class GardenStateService:
                         "ts_utc": row.ts_utc.isoformat(),
                         "value": row.value_num if row.value_num is not None else row.value_text,
                     }
-                    for row in get_sensor_history(session, sensor_id=sensor_id, metric=metric_id, limit=48)
+                    for row in get_sensor_history(session, sensor_id=sensor_id, metric=metric_id, hours=hours, limit=limit)
                 ]
             data[sensor_id] = {
                 "label": sensor.label,
@@ -183,7 +187,7 @@ class GardenStateService:
             }
         return data
 
-    def _build_history(self, *, session: Session) -> dict[str, Any]:
+    def _build_history(self, *, session: Session, hours: int = 24) -> dict[str, Any]:
         decision_history = [
             {
                 "ts_utc": row.ts_utc.isoformat(),
@@ -201,7 +205,7 @@ class GardenStateService:
                 "status": row.status,
                 "payload": row.payload_json,
             }
-            for row in list_recent_actuator_events(session, limit=500)
+            for row in list_recent_actuator_events(session, hours=hours, limit=500)
         ]
         return {
             "decision_history": decision_history,

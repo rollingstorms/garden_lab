@@ -7,6 +7,18 @@ const ACTUATOR_COLORS = {
   water_pump: "#3b82f6",
 };
 
+const CHART_RANGE_OPTIONS = [
+  { label: "1h", hours: 1 },
+  { label: "3h", hours: 3 },
+  { label: "6h", hours: 6 },
+  { label: "12h", hours: 12 },
+  { label: "24h", hours: 24 },
+  { label: "3d", hours: 72 },
+  { label: "7d", hours: 168 },
+];
+
+const DRUM_ITEM_H = 44;
+
 const state = {
   garden: null,
   chartsData: null,
@@ -15,6 +27,7 @@ const state = {
   activeSection: "control",
   openConfig: null,
   optimisticActuators: {},
+  chartHours: Number(window.localStorage.getItem("gardenLab.chartHours")) || 6,
   temperatureUnit: window.localStorage.getItem("gardenLab.temperatureUnit") || "C",
   inspect: {
     chartId: null,
@@ -93,13 +106,13 @@ async function loadGardenState() {
 }
 
 async function loadGardenCharts() {
-  state.chartsData = await fetchJson("/api/garden/charts");
+  state.chartsData = await fetchJson(`/api/garden/charts?hours=${state.chartHours}`);
   renderCharts();
   updateChartReadout();
 }
 
 async function loadGardenHistory() {
-  state.historyData = await fetchJson("/api/garden/history");
+  state.historyData = await fetchJson(`/api/garden/history?hours=${state.chartHours}`);
   renderTimelines();
 }
 
@@ -396,7 +409,7 @@ function drawActuatorTimeline() {
 
   const events = state.historyData?.history?.actuator_events || [];
   const now = Date.now();
-  const windowStart = now - 24 * 60 * 60 * 1000;
+  const windowStart = now - state.chartHours * 60 * 60 * 1000;
   const windowEnd = now;
   const spans = buildActuatorSpans(events, windowStart, windowEnd);
 
@@ -455,12 +468,15 @@ function drawActuatorTimeline() {
     ctx.lineTo(x, PAD_TOP + actuatorOrder.length * (ROW_H + ROW_GAP) - ROW_GAP);
     ctx.stroke();
     const d = new Date(windowStart + ratio * timeRange);
+    const label = state.chartHours <= 24
+      ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+      : `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}h`;
     ctx.fillStyle = "#555";
     ctx.font = "9px system-ui, sans-serif";
     ctx.textBaseline = "top";
     ctx.textAlign = "center";
     ctx.fillText(
-      `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
+      label,
       x,
       PAD_TOP + actuatorOrder.length * (ROW_H + ROW_GAP) - ROW_GAP + 4,
     );
@@ -1307,6 +1323,7 @@ function bindEvents() {
   bindConfigAccordions();
   bindModeToggles();
   bindUtilityActions();
+  bindRangePicker();
   window.addEventListener("resize", () => {
     syncSectionVisibility();
     redrawAllCharts();
@@ -1316,6 +1333,76 @@ function bindEvents() {
     if (!event.target.closest("canvas")) {
       if (state.inspect.locked) clearInspect();
     }
+  });
+}
+
+function openRangePicker() {
+  const sheet = document.getElementById("drum-sheet");
+  const drum = document.getElementById("drum-scroll");
+  drum.innerHTML = CHART_RANGE_OPTIONS
+    .map((opt) => `<div class="drum-item" data-hours="${opt.hours}">${opt.label}</div>`)
+    .join("");
+  const idx = CHART_RANGE_OPTIONS.findIndex((o) => o.hours === state.chartHours);
+  requestAnimationFrame(() => {
+    drum.scrollTop = Math.max(0, idx * DRUM_ITEM_H);
+    updateDrumHighlight(drum);
+  });
+  sheet.hidden = false;
+}
+
+function updateDrumHighlight(drum) {
+  const idx = Math.max(0, Math.min(
+    CHART_RANGE_OPTIONS.length - 1,
+    Math.round(drum.scrollTop / DRUM_ITEM_H),
+  ));
+  drum.querySelectorAll(".drum-item").forEach((el, i) => el.classList.toggle("is-selected", i === idx));
+}
+
+function applyRangePicker() {
+  const drum = document.getElementById("drum-scroll");
+  const idx = Math.max(0, Math.min(
+    CHART_RANGE_OPTIONS.length - 1,
+    Math.round(drum.scrollTop / DRUM_ITEM_H),
+  ));
+  const opt = CHART_RANGE_OPTIONS[idx];
+  document.getElementById("drum-sheet").hidden = true;
+  if (opt.hours !== state.chartHours) {
+    state.chartHours = opt.hours;
+    window.localStorage.setItem("gardenLab.chartHours", String(opt.hours));
+    document.getElementById("range-pill-label").textContent = opt.label;
+    state.chartsData = null;
+    state.historyData = null;
+    loadGardenCharts().catch(() => {});
+    loadGardenHistory().catch(() => {});
+  }
+}
+
+function bindRangePicker() {
+  const btn = document.getElementById("range-picker-btn");
+  const sheet = document.getElementById("drum-sheet");
+  const drum = document.getElementById("drum-scroll");
+  const label = document.getElementById("range-pill-label");
+
+  const currentOpt = CHART_RANGE_OPTIONS.find((o) => o.hours === state.chartHours) || CHART_RANGE_OPTIONS[2];
+  label.textContent = currentOpt.label;
+
+  btn.addEventListener("click", openRangePicker);
+  sheet.querySelector(".drum-sheet__backdrop").addEventListener("click", applyRangePicker);
+  sheet.querySelector(".drum-done-btn").addEventListener("click", applyRangePicker);
+
+  let debounce;
+  drum.addEventListener("scroll", () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => updateDrumHighlight(drum), 60);
+  });
+
+  drum.addEventListener("click", (e) => {
+    const item = e.target.closest(".drum-item");
+    if (!item) return;
+    const idx = CHART_RANGE_OPTIONS.findIndex((o) => String(o.hours) === item.dataset.hours);
+    if (idx === -1) return;
+    drum.scrollTo({ top: idx * DRUM_ITEM_H, behavior: "smooth" });
+    setTimeout(() => applyRangePicker(), 250);
   });
 }
 
