@@ -21,7 +21,7 @@ class AutomationScheduler:
         self.scheduler.add_job(
             self.refresh_actuator_state_cache,
             trigger="interval",
-            seconds=5,
+            seconds=self.app_config.automation_interval_seconds,
             id="actuator-state-refresh",
             replace_existing=True,
             max_instances=1,

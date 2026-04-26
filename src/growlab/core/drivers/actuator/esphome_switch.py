@@ -98,9 +98,9 @@ class ESPHomeSwitchDriver:
             noise_psk=self._noise_psk(),
             expected_name=self._expected_name(),
         )
-        await client.connect(login=True)
+        await asyncio.wait_for(client.connect(login=True), timeout=8.0)
         try:
-            return await runner(client)
+            return await asyncio.wait_for(runner(client), timeout=8.0)
         finally:
             await client.disconnect()
 
