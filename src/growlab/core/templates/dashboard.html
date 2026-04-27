@@ -21,19 +21,39 @@
         <div class="overview-hub-grid" id="overview-hub-grid">
           <button class="overview-mini-card overview-mini-card--charts" data-overview-nav="charts" type="button">
             <div class="overview-mini-card__meta">Charts</div>
-            <div class="mini-plot-grid" id="overview-mini-charts"></div>
+            <div class="mini-plot-grid" id="overview-mini-charts">
+              <article class="mini-plot-card"><div class="mini-plot-card__placeholder"></div></article>
+              <article class="mini-plot-card"><div class="mini-plot-card__placeholder"></div></article>
+              <article class="mini-plot-card"><div class="mini-plot-card__placeholder"></div></article>
+              <article class="mini-plot-card"><div class="mini-plot-card__placeholder"></div></article>
+            </div>
           </button>
           <button class="overview-mini-card overview-mini-card--sensors" data-overview-nav="sensors" type="button">
             <div class="overview-mini-card__meta">Sensors</div>
-            <div class="mini-reading-grid" id="overview-mini-sensors"></div>
+            <div class="mini-reading-grid" id="overview-mini-sensors">
+              <article class="mini-reading-card"><div class="mini-reading-card__label">Temp</div><div class="mini-reading-card__value">--</div></article>
+              <article class="mini-reading-card"><div class="mini-reading-card__label">Hum</div><div class="mini-reading-card__value">--</div></article>
+              <article class="mini-reading-card"><div class="mini-reading-card__label">Light</div><div class="mini-reading-card__value">--</div></article>
+              <article class="mini-reading-card"><div class="mini-reading-card__label">Soil</div><div class="mini-reading-card__value">--</div></article>
+            </div>
           </button>
           <button class="overview-mini-card overview-mini-card--control" data-overview-nav="control" type="button">
             <div class="overview-mini-card__meta">Control</div>
-            <div class="mini-control-grid" id="overview-mini-control"></div>
+            <div class="mini-control-grid" id="overview-mini-control">
+              <article class="mini-control-card is-off"><div class="mini-control-card__name">Fan</div><div class="mini-control-card__state">--</div></article>
+              <article class="mini-control-card is-off"><div class="mini-control-card__name">Pump</div><div class="mini-control-card__state">--</div></article>
+              <article class="mini-control-card is-off"><div class="mini-control-card__name">Pads</div><div class="mini-control-card__state">--</div></article>
+              <article class="mini-control-card is-off"><div class="mini-control-card__name">Lamps</div><div class="mini-control-card__state">--</div></article>
+            </div>
           </button>
           <button class="overview-mini-card overview-mini-card--summary" data-overview-nav="summary" type="button">
             <div class="overview-mini-card__meta">Overview</div>
-            <div class="mini-summary-grid" id="overview-mini-summary"></div>
+            <div class="mini-summary-grid" id="overview-mini-summary">
+              <article class="mini-summary-card"><div class="mini-summary-card__label">Mode</div><div class="mini-summary-card__value">--</div></article>
+              <article class="mini-summary-card"><div class="mini-summary-card__label">Overrides</div><div class="mini-summary-card__value">--</div></article>
+              <article class="mini-summary-card"><div class="mini-summary-card__label">Decision</div><div class="mini-summary-card__value">--</div></article>
+              <article class="mini-summary-card"><div class="mini-summary-card__label">Diff</div><div class="mini-summary-card__value">--</div></article>
+            </div>
           </button>
         </div>
       </section>
