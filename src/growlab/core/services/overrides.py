@@ -14,7 +14,7 @@ from growlab.core.db.repo_overrides import (
     list_manual_overrides,
     update_manual_override_status,
 )
-from growlab.shared.time import utc_now
+from growlab.shared.time import utc_isoformat, utc_now
 
 DEFAULT_OVERRIDE_MINUTES = {
     "exhaust_fan": 30,
@@ -76,7 +76,7 @@ class ManualOverrideService:
                 "override_id": record.id,
                 "mode": mode,
                 "pulse_seconds": pulse_seconds,
-                "expires_at_utc": expires_at_utc.isoformat(),
+                "expires_at_utc": utc_isoformat(expires_at_utc),
                 "reason": reason,
                 "source": source,
             },

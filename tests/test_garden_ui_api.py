@@ -510,3 +510,24 @@ def test_refresh_persists_observed_actuator_state_history(tmp_path: Path, monkey
     timeline = response.json()["history"]["actuator_state_timeline"]["actuators"]["lamps"]
     assert timeline["has_history"] is True
     assert len(timeline["spans"]) == 1
+
+
+def test_history_api_serializes_timestamps_as_explicit_utc(tmp_path: Path, monkeypatch) -> None:
+    client, _ = build_client(tmp_path, monkeypatch)
+    seed_air_sensor(client, temp=25.0, humidity=50.0)
+    set_live_states(monkeypatch, {"lamps": True})
+
+    response = client.get("/api/actuators/lamps/state")
+    assert response.status_code == 200
+
+    history_response = client.get("/api/garden/history?hours=24")
+    assert history_response.status_code == 200
+    payload = history_response.json()["history"]
+    timeline = payload["actuator_state_timeline"]
+
+    assert timeline["window_start_utc"].endswith("Z")
+    assert timeline["window_end_utc"].endswith("Z")
+    spans = timeline["actuators"]["lamps"]["spans"]
+    assert spans
+    assert spans[0]["start"].endswith("Z")
+    assert spans[0]["end"].endswith("Z")

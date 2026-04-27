@@ -32,6 +32,7 @@ from growlab.core.services.ingestion import IngestionService
 from growlab.core.services.automation import AutomationService
 from growlab.core.services.garden_state import GardenStateService
 from growlab.core.services.overrides import ManualOverrideService
+from growlab.shared.time import utc_isoformat
 
 router = APIRouter(prefix="/api")
 STATE_CACHE_TTL_SECONDS = 2.0
@@ -141,7 +142,7 @@ def sensor_history_endpoint(
         "hours": hours,
         "points": [
             {
-                "ts_utc": row.ts_utc.isoformat(),
+                "ts_utc": utc_isoformat(row.ts_utc),
                 "value_num": row.value_num,
                 "value_text": row.value_text,
                 "source_kind": row.source_kind,
@@ -180,7 +181,7 @@ def actuator_state(
         "latest_event": {
             "event_type": latest_event.event_type,
             "status": latest_event.status,
-            "ts_utc": latest_event.ts_utc.isoformat(),
+            "ts_utc": utc_isoformat(latest_event.ts_utc),
         }
         if latest_event
         else None,
@@ -385,7 +386,7 @@ def create_manual_override(
             "id": record.id,
             "actuator_id": actuator_id,
             "mode": record.mode,
-            "expires_at_utc": record.expires_at_utc.isoformat(),
+            "expires_at_utc": utc_isoformat(record.expires_at_utc),
         },
         "garden": GardenStateService().snapshot(registry=registry, session=session),
     }
@@ -459,7 +460,7 @@ def automation_detail(
         "latest_event": {
             "decision": latest_event.decision,
             "reason": latest_event.reason,
-            "ts_utc": latest_event.ts_utc.isoformat(),
+            "ts_utc": utc_isoformat(latest_event.ts_utc),
         }
         if latest_event
         else None,

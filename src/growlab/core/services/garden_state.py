@@ -19,6 +19,7 @@ from growlab.core.db.repo_overrides import list_active_manual_overrides
 from growlab.core.db.repo_readings import get_latest_sensor_metrics_batch, get_sensor_history_batch
 from growlab.core.services.configuration import ConfigService, GARDEN_AUTOMATION_ID
 from growlab.core.services.overrides import ManualOverrideService
+from growlab.shared.time import utc_isoformat
 
 CHART_POINT_BUDGET = 240
 
@@ -35,13 +36,13 @@ class GardenStateService:
         actuators = self._build_actuator_state(registry=registry, session=session)
         effective_config = ConfigService().get_garden_config()["effective"]
         return {
-            "generated_at": (latest_decision.ts_utc.isoformat() if latest_decision else None),
+            "generated_at": (utc_isoformat(latest_decision.ts_utc) if latest_decision else None),
             "automation_id": GARDEN_AUTOMATION_ID,
             "timezone": registry.config.app.timezone,
             "decision": {
                 "reason": latest_decision.reason if latest_decision else None,
                 "decision": latest_decision.decision if latest_decision else None,
-                "ts_utc": latest_decision.ts_utc.isoformat() if latest_decision else None,
+                "ts_utc": utc_isoformat(latest_decision.ts_utc) if latest_decision else None,
                 "diagnostics": latest_decision.payload_json.get("diagnostics", {}) if latest_decision else {},
             },
             "emergency": {
@@ -127,7 +128,7 @@ class GardenStateService:
                 history[metric_id] = _downsample_series(
                     [
                         {
-                            "ts_utc": row.ts_utc.isoformat(),
+                            "ts_utc": utc_isoformat(row.ts_utc),
                             "value": row.value_num if row.value_num is not None else row.value_text,
                         }
                         for row in history_rows.get((sensor_id, metric_id), [])
@@ -189,7 +190,7 @@ class GardenStateService:
                 "last_seen_at": live_state.last_seen_at,
                 "error": live_state.error,
                 "badge": badge,
-                "last_command_at": latest_event.ts_utc.isoformat() if latest_event else None,
+                "last_command_at": utc_isoformat(latest_event.ts_utc) if latest_event else None,
                 "last_command_power": last_command_power,
                 "last_reason": latest_decision_reason,
                 "override": (
@@ -197,9 +198,7 @@ class GardenStateService:
                         "id": active_override.id,
                         "mode": active_override.mode,
                         "reason": active_override.reason,
-                        "expires_at_utc": active_override.expires_at_utc.replace(tzinfo=timezone.utc).isoformat()
-                        if active_override.expires_at_utc.tzinfo is None
-                        else active_override.expires_at_utc.isoformat(),
+                        "expires_at_utc": utc_isoformat(active_override.expires_at_utc),
                         "pulse_seconds": active_override.pulse_seconds,
                     }
                     if active_override
@@ -211,7 +210,7 @@ class GardenStateService:
     def _build_history(self, *, session: Session, hours: int = 24) -> dict[str, Any]:
         decision_history = [
             {
-                "ts_utc": row.ts_utc.isoformat(),
+                "ts_utc": utc_isoformat(row.ts_utc),
                 "decision": row.decision,
                 "reason": row.reason,
                 "payload": row.payload_json,
@@ -220,7 +219,7 @@ class GardenStateService:
         ]
         actuator_events = [
             {
-                "ts_utc": row.ts_utc.isoformat(),
+                "ts_utc": utc_isoformat(row.ts_utc),
                 "actuator_id": row.actuator_id,
                 "event_type": row.event_type,
                 "status": row.status,
@@ -239,8 +238,8 @@ class GardenStateService:
                     "status": row.status,
                     "reason": row.reason,
                     "pulse_seconds": row.pulse_seconds,
-                    "created_at_utc": row.created_at_utc.isoformat(),
-                    "expires_at_utc": row.expires_at_utc.isoformat(),
+                    "created_at_utc": utc_isoformat(row.created_at_utc),
+                    "expires_at_utc": utc_isoformat(row.expires_at_utc),
                 }
                 for row in ManualOverrideService().recent_history(session, limit=30)
             ],
@@ -253,7 +252,7 @@ class GardenStateService:
             "actuator_state_timeline": timeline,
             "config_events": [
                 {
-                    "ts_utc": row.ts_utc.isoformat(),
+                    "ts_utc": utc_isoformat(row.ts_utc),
                     "event_type": row.event_type,
                     "message": row.message,
                     "payload": row.payload_json,
@@ -288,8 +287,8 @@ class GardenStateService:
                 elif current_power is True and current_start is not None:
                     spans.append(
                         {
-                            "start": current_start.isoformat(),
-                            "end": ts.isoformat(),
+                            "start": utc_isoformat(current_start),
+                            "end": utc_isoformat(ts),
                         }
                     )
                     current_start = None
@@ -297,8 +296,8 @@ class GardenStateService:
             if current_power is True and current_start is not None:
                 spans.append(
                     {
-                        "start": current_start.isoformat(),
-                        "end": window_end.isoformat(),
+                        "start": utc_isoformat(current_start),
+                        "end": utc_isoformat(window_end),
                     }
                 )
             actuators[actuator_id] = {
@@ -309,8 +308,8 @@ class GardenStateService:
                 "last_known_power": current_power,
             }
         return {
-            "window_start_utc": window_start.isoformat(),
-            "window_end_utc": window_end.isoformat(),
+            "window_start_utc": utc_isoformat(window_start),
+            "window_end_utc": utc_isoformat(window_end),
             "actuators": actuators,
         }
 
@@ -318,7 +317,7 @@ class GardenStateService:
 def utc_now_iso() -> str:
     from growlab.shared.time import utc_now
 
-    return utc_now().isoformat()
+    return utc_isoformat(utc_now())
 
 
 def _reading_value(row) -> Any:

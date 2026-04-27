@@ -10,7 +10,7 @@ from growlab.core.config.registry import EntityRegistry
 from growlab.core.db.repo_actuator_state_history import get_latest_actuator_state_history, insert_actuator_state_history
 from growlab.core.db.repo_events import get_latest_actuator_event
 from growlab.core.drivers.registry import load_actuator_driver
-from growlab.shared.time import utc_now
+from growlab.shared.time import utc_isoformat, utc_now
 
 
 @dataclass
@@ -75,7 +75,7 @@ class ActuatorStateService:
 
         result = driver.get_state()
         now = utc_now()
-        now_iso = now.isoformat()
+        now_iso = utc_isoformat(now)
         previous = self._cache.get(actuator_id)
         power = result.get("state", {}).get("power")
         if result.get("status") == "ok" and isinstance(power, bool):
@@ -153,7 +153,7 @@ class ActuatorStateService:
             power=power,
             state_status="ok",
             state_source="live",
-            last_seen_at=utc_now().isoformat(),
+            last_seen_at=utc_isoformat(utc_now()),
             error=None,
             driver_state=result,
         )
@@ -173,7 +173,7 @@ class ActuatorStateService:
                 power=latest_history.power,
                 state_status="fallback",
                 state_source="history",
-                last_seen_at=latest_history.ts_utc.isoformat(),
+                last_seen_at=utc_isoformat(latest_history.ts_utc),
             )
         latest_event = get_latest_actuator_event(session, actuator_id=actuator_id)
         power = None
@@ -182,7 +182,7 @@ class ActuatorStateService:
             command = latest_event.payload_json["command"]
             if isinstance(command.get("power"), bool):
                 power = command["power"]
-                ts_utc = latest_event.ts_utc.isoformat()
+                ts_utc = utc_isoformat(latest_event.ts_utc)
         if isinstance(power, bool):
             return ActuatorStateSnapshot(
                 actuator_id=actuator_id,
