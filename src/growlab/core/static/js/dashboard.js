@@ -230,10 +230,10 @@ function renderOverviewMiniSensors() {
     }
   }
   els.overviewMiniSensors.innerHTML = metrics.slice(0, 4).map(({ metricId, metric }) => `
-    <article class="mini-reading-card">
-      <div class="mini-reading-card__label">${shortMetricLabel(metric.label)}</div>
-      <div class="mini-reading-card__value">${formatMetricValue(metricId, metric.value)}</div>
-    </article>
+    <span class="mini-reading-card">
+      <span class="mini-reading-card__label">${shortMetricLabel(metric.label)}</span>
+      <span class="mini-reading-card__value">${formatMetricValue(metricId, metric.value)}</span>
+    </span>
   `).join("");
 }
 
@@ -243,10 +243,10 @@ function renderOverviewMiniControl() {
     const merged = mergeActuatorState(actuatorId, actuator);
     const isOn = merged.power === true;
     return `
-      <article class="mini-control-card ${isOn ? "is-on" : "is-off"}">
-        <div class="mini-control-card__name">${shortActuatorLabel(merged.label)}</div>
-        <div class="mini-control-card__state">${isOn ? "ON" : "OFF"}</div>
-      </article>
+      <span class="mini-control-card ${isOn ? "is-on" : "is-off"}">
+        <span class="mini-control-card__name">${shortActuatorLabel(merged.label)}</span>
+        <span class="mini-control-card__state">${isOn ? "ON" : "OFF"}</span>
+      </span>
     `;
   }).join("");
 }
@@ -263,10 +263,10 @@ function renderOverviewMiniSummary() {
     ["Diff", String(diffCount)],
   ];
   els.overviewMiniSummary.innerHTML = items.map(([label, value]) => `
-    <article class="mini-summary-card">
-      <div class="mini-summary-card__label">${label}</div>
-      <div class="mini-summary-card__value">${value}</div>
-    </article>
+    <span class="mini-summary-card">
+      <span class="mini-summary-card__label">${label}</span>
+      <span class="mini-summary-card__value">${value}</span>
+    </span>
   `).join("");
 }
 
@@ -274,9 +274,9 @@ function renderOverviewMiniCharts() {
   if (!els.overviewMiniCharts) return;
   const series = pickOverviewChartSeries();
   els.overviewMiniCharts.innerHTML = series.map((item) => `
-    <article class="mini-plot-card">
-      ${item.points.length ? miniSparkline(item.points, item.color) : `<div class="mini-plot-card__placeholder"></div>`}
-    </article>
+    <span class="mini-plot-card">
+      ${item.points.length ? miniSparkline(item.points, item.color) : `<span class="mini-plot-card__placeholder"></span>`}
+    </span>
   `).join("");
 }
 

@@ -399,6 +399,7 @@ button {
 }
 
 .overview-mini-card__meta {
+  display: block;
   color: var(--muted);
   font-size: 0.72rem;
   letter-spacing: 0.12em;
@@ -428,6 +429,7 @@ button {
 .mini-reading-card,
 .mini-control-card,
 .mini-summary-card {
+  display: block;
   min-height: 64px;
   border-radius: 14px;
   border: 1px solid rgba(172, 229, 197, 0.08);
@@ -455,6 +457,7 @@ button {
 .mini-reading-card,
 .mini-control-card,
 .mini-summary-card {
+  display: grid;
   padding: 0.6rem;
 }
 
