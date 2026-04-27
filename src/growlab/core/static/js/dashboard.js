@@ -141,8 +141,11 @@ async function loadHeavyState() {
 }
 
 function ensureSectionData(section) {
-  if (section === "overview" && !state.chartsData) {
-    return loadGardenCharts().catch(() => {});
+  if (section === "overview") {
+    const tasks = [];
+    if (!state.chartsData) tasks.push(loadGardenCharts());
+    if (!state.historyData) tasks.push(loadGardenHistory());
+    return Promise.allSettled(tasks);
   }
   if (section === "charts") {
     const tasks = [];
@@ -284,7 +287,6 @@ function pickOverviewChartSeries() {
     { key: "temperature", color: "#ff9a68" },
     { key: "humidity", color: "#78cfff" },
     { key: "lux", color: "#ffd970" },
-    { key: "moisture", color: "#6ef0a5" },
   ];
   for (const wantedSeries of wanted) {
     const match = findChartSeries((metricId, metric) => metricMatches(metricId, metric?.label, wantedSeries.key));
@@ -296,6 +298,11 @@ function pickOverviewChartSeries() {
       });
     }
   }
+  found.push({
+    metricId: "actuator_timeline",
+    color: "#6ef0a5",
+    points: buildOverviewActuatorPreviewPoints(),
+  });
   while (found.length < 4) {
     found.push({
       metricId: `placeholder-${found.length}`,
@@ -394,6 +401,42 @@ function findChartSeries(predicate) {
     }
   }
   return null;
+}
+
+function buildOverviewActuatorPreviewPoints() {
+  const timeline = state.historyData?.history?.actuator_state_timeline;
+  if (!timeline) return [];
+  const windowStart = new Date(timeline.window_start_utc).getTime();
+  const windowEnd = new Date(timeline.window_end_utc).getTime();
+  if (!Number.isFinite(windowStart) || !Number.isFinite(windowEnd) || windowEnd <= windowStart) return [];
+
+  const chosenActuator = selectOverviewTimelineActuator(timeline.actuators || {});
+  if (!chosenActuator) return [];
+  const spans = chosenActuator.spans || [];
+  if (!spans.length) return [];
+
+  const stepCount = 24;
+  const points = [];
+  for (let index = 0; index < stepCount; index += 1) {
+    const ratio = index / Math.max(stepCount - 1, 1);
+    const ts = windowStart + ratio * (windowEnd - windowStart);
+    const active = spans.some((span) => {
+      const start = new Date(span.start).getTime();
+      const end = new Date(span.end).getTime();
+      return ts >= start && ts <= end;
+    });
+    points.push(active ? 1 : 0);
+  }
+  return points;
+}
+
+function selectOverviewTimelineActuator(actuators) {
+  const preferredOrder = ["lamps", "warm_pads", "exhaust_fan", "water_pump"];
+  for (const actuatorId of preferredOrder) {
+    const item = actuators[actuatorId];
+    if (item?.has_history && (item.spans || []).length) return item;
+  }
+  return Object.values(actuators).find((item) => item?.has_history && (item.spans || []).length) || null;
 }
 
 function metricMatches(metricId, label, key) {
@@ -1640,6 +1683,10 @@ setInterval(() => {
 }, 30000);
 setInterval(() => {
   if (state.activeSection === "charts") {
+    loadGardenHistory().catch(() => {});
+    return;
+  }
+  if (state.activeSection === "overview") {
     loadGardenHistory().catch(() => {});
     return;
   }
