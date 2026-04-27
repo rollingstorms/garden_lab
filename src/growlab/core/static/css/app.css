@@ -297,7 +297,7 @@ button {
   top: 0.55rem;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.35rem;
   padding: 0.35rem;
   margin-top: 0.9rem;
@@ -346,6 +346,16 @@ button {
     linear-gradient(180deg, rgba(18, 36, 31, 0.98), rgba(10, 19, 18, 0.98));
 }
 
+.panel-card--overview-hub {
+  background:
+    radial-gradient(circle at top right, rgba(110, 240, 165, 0.06), transparent 26%),
+    linear-gradient(180deg, rgba(18, 35, 31, 0.98), rgba(10, 19, 18, 0.98));
+}
+
+.top-shell--shared {
+  margin-top: 1rem;
+}
+
 .sensor-strip,
 .device-grid,
 .chart-grid {
@@ -359,6 +369,124 @@ button {
 .history-panels--control,
 .config-stack {
   grid-template-columns: 1fr;
+}
+
+.sensor-strip {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.overview-hub-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.overview-mini-card {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+  min-height: 188px;
+  padding: 0.8rem;
+  border-radius: 18px;
+  border: 1px solid rgba(172, 229, 197, 0.1);
+  color: var(--text);
+  background:
+    linear-gradient(180deg, rgba(22, 40, 36, 0.96), rgba(11, 21, 19, 0.98));
+  text-align: left;
+  box-shadow: var(--shadow-soft);
+}
+
+.overview-mini-card__meta {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mini-plot-grid,
+.mini-reading-grid,
+.mini-control-grid,
+.mini-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  min-height: 0;
+}
+
+.mini-plot-card,
+.mini-reading-card,
+.mini-control-card,
+.mini-summary-card {
+  min-height: 64px;
+  border-radius: 14px;
+  border: 1px solid rgba(172, 229, 197, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mini-plot-card {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.mini-plot-card__svg {
+  width: 100%;
+  height: 56px;
+}
+
+.mini-plot-card__placeholder {
+  width: 72%;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(172, 229, 197, 0.08), rgba(172, 229, 197, 0.02));
+}
+
+.mini-reading-card,
+.mini-control-card,
+.mini-summary-card {
+  padding: 0.6rem;
+}
+
+.mini-reading-card__label,
+.mini-summary-card__label {
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.mini-reading-card__value,
+.mini-summary-card__value {
+  margin-top: 0.28rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.mini-control-card {
+  display: grid;
+  align-content: center;
+  gap: 0.2rem;
+}
+
+.mini-control-card.is-on {
+  background: linear-gradient(180deg, rgba(110, 240, 165, 0.18), rgba(34, 197, 94, 0.14));
+  border-color: rgba(110, 240, 165, 0.24);
+}
+
+.mini-control-card.is-off {
+  opacity: 0.78;
+}
+
+.mini-control-card__name {
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.mini-control-card__state {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
 }
 
 .sensor-tile {
@@ -927,7 +1055,7 @@ button {
 
 @media (min-width: 1240px) {
   .section-tabs {
-    grid-template-columns: repeat(4, max-content);
+    grid-template-columns: repeat(5, max-content);
     justify-content: start;
   }
 

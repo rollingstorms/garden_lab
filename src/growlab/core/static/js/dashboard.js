@@ -24,7 +24,7 @@ const state = {
   chartsData: null,
   historyData: null,
   configData: null,
-  activeSection: "control",
+  activeSection: "overview",
   openConfig: null,
   optimisticActuators: {},
   chartHours: Number(window.localStorage.getItem("gardenLab.chartHours")) || 6,
@@ -47,6 +47,10 @@ const charts = {};
 const els = {
   emergencyBanner: document.getElementById("emergency-banner"),
   overviewDeck: document.getElementById("overview-deck"),
+  overviewMiniCharts: document.getElementById("overview-mini-charts"),
+  overviewMiniSensors: document.getElementById("overview-mini-sensors"),
+  overviewMiniControl: document.getElementById("overview-mini-control"),
+  overviewMiniSummary: document.getElementById("overview-mini-summary"),
   sensorStrip: document.getElementById("sensor-strip"),
   actuatorGrid: document.getElementById("actuator-grid"),
   chartGrid: document.getElementById("chart-grid"),
@@ -109,6 +113,7 @@ async function loadGardenState() {
 async function loadGardenCharts() {
   state.chartsData = await fetchJson(`/api/garden/charts?hours=${state.chartHours}`);
   renderCharts();
+  renderOverviewHub();
   updateChartReadout();
 }
 
@@ -120,6 +125,7 @@ async function loadGardenHistory() {
 async function loadGardenConfig() {
   state.configData = await fetchJson("/api/garden/config");
   renderOverview();
+  renderOverviewHub();
   renderConfigDiff();
   renderConfigSummaries();
   renderConfigPowerStates();
@@ -153,6 +159,7 @@ function render() {
   syncSectionVisibility();
   renderEmergencyBanner();
   renderOverview();
+  renderOverviewHub();
   renderSensors();
   renderActuators();
   renderCharts();
@@ -164,6 +171,15 @@ function render() {
   renderConfigForms();
   renderFooter();
   updateChartReadout();
+}
+
+function activateSection(section) {
+  state.activeSection = section;
+  syncSectionVisibility();
+  ensureSectionData(section).catch(() => {});
+  if (section === "charts") {
+    requestAnimationFrame(() => requestAnimationFrame(() => drawActuatorTimeline()));
+  }
 }
 
 function syncSectionVisibility() {
@@ -196,6 +212,124 @@ function renderOverview() {
     overviewCard("Last Decision", decision.decision || "Idle", decision.ts_utc ? formatTime(decision.ts_utc) : "No decision recorded"),
     overviewCard("Config Diff", String(diffCount), "Modules diverging from base config"),
   ].join("");
+}
+
+function renderOverviewHub() {
+  renderOverviewMiniSensors();
+  renderOverviewMiniControl();
+  renderOverviewMiniSummary();
+  renderOverviewMiniCharts();
+}
+
+function renderOverviewMiniSensors() {
+  if (!els.overviewMiniSensors || !state.garden) return;
+  const metrics = [];
+  for (const sensor of Object.values(state.garden.sensors)) {
+    for (const [metricId, metric] of Object.entries(sensor.metrics)) {
+      metrics.push({ metricId, metric });
+    }
+  }
+  els.overviewMiniSensors.innerHTML = metrics.slice(0, 4).map(({ metricId, metric }) => `
+    <article class="mini-reading-card">
+      <div class="mini-reading-card__label">${shortMetricLabel(metric.label)}</div>
+      <div class="mini-reading-card__value">${formatMetricValue(metricId, metric.value)}</div>
+    </article>
+  `).join("");
+}
+
+function renderOverviewMiniControl() {
+  if (!els.overviewMiniControl || !state.garden) return;
+  els.overviewMiniControl.innerHTML = Object.entries(state.garden.actuators).slice(0, 4).map(([actuatorId, actuator]) => {
+    const merged = mergeActuatorState(actuatorId, actuator);
+    const isOn = merged.power === true;
+    return `
+      <article class="mini-control-card ${isOn ? "is-on" : "is-off"}">
+        <div class="mini-control-card__name">${shortActuatorLabel(merged.label)}</div>
+        <div class="mini-control-card__state">${isOn ? "ON" : "OFF"}</div>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderOverviewMiniSummary() {
+  if (!els.overviewMiniSummary || !state.garden) return;
+  const decision = state.garden.decision || {};
+  const activeOverrides = Object.values(state.garden.actuators).filter((item) => item.override).length;
+  const diffCount = state.configData?.diff ? Object.keys(state.configData.diff).length : "…";
+  const items = [
+    ["Mode", decision.reason === "garden_emergency" ? "Emergency" : "Balance"],
+    ["Overrides", String(activeOverrides)],
+    ["Decision", humanizeReason(decision.decision || "idle")],
+    ["Diff", String(diffCount)],
+  ];
+  els.overviewMiniSummary.innerHTML = items.map(([label, value]) => `
+    <article class="mini-summary-card">
+      <div class="mini-summary-card__label">${label}</div>
+      <div class="mini-summary-card__value">${value}</div>
+    </article>
+  `).join("");
+}
+
+function renderOverviewMiniCharts() {
+  if (!els.overviewMiniCharts) return;
+  const series = pickOverviewChartSeries();
+  els.overviewMiniCharts.innerHTML = series.map((item) => `
+    <article class="mini-plot-card">
+      ${item.points.length ? miniSparkline(item.points, item.color) : `<div class="mini-plot-card__placeholder"></div>`}
+    </article>
+  `).join("");
+}
+
+function pickOverviewChartSeries() {
+  const palette = {
+    temperature_c: "#ff9a68",
+    humidity_pct: "#78cfff",
+    lux: "#ffd970",
+    moisture_pct: "#6ef0a5",
+  };
+  const wanted = ["temperature_c", "humidity_pct", "lux", "moisture_pct"];
+  const found = [];
+  if (state.chartsData?.sensors) {
+    for (const sensor of Object.values(state.chartsData.sensors)) {
+      for (const metricId of wanted) {
+        if (sensor.history?.[metricId] && !found.find((item) => item.metricId === metricId)) {
+          found.push({
+            metricId,
+            color: palette[metricId] || "#8ec8ff",
+            points: (sensor.history[metricId] || [])
+              .map((item) => Number(item.value))
+              .filter((value) => !Number.isNaN(value)),
+          });
+        }
+      }
+    }
+  }
+  while (found.length < 4) {
+    found.push({
+      metricId: `placeholder-${found.length}`,
+      color: ["#ff9a68", "#78cfff", "#ffd970", "#6ef0a5"][found.length],
+      points: [],
+    });
+  }
+  return found.slice(0, 4);
+}
+
+function miniSparkline(points, color) {
+  const width = 120;
+  const height = 72;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  const d = points.map((value, index) => {
+    const x = (index / Math.max(points.length - 1, 1)) * width;
+    const y = height - ((value - min) / range) * height;
+    return `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(" ");
+  return `
+    <svg viewBox="0 0 ${width} ${height}" class="mini-plot-card__svg" aria-hidden="true">
+      <path d="${d}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  `;
 }
 
 function renderFooter() {
@@ -1135,6 +1269,17 @@ function labelizeActuator(value) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+function shortMetricLabel(label) {
+  return String(label).replace("Temperature", "Temp").replace("Humidity", "Hum");
+}
+
+function shortActuatorLabel(label) {
+  return String(label)
+    .replace("Exhaust ", "")
+    .replace("Water ", "")
+    .replace("Warm ", "");
+}
+
 function overrideText(override) {
   if (!override) return "Auto mode";
   if (override.mode === "pulse") return `Pulse active until ${formatShortTime(override.expires_at_utc)}`;
@@ -1246,13 +1391,23 @@ function showToast(message, isError = false) {
 function bindSectionTabs() {
   document.querySelectorAll("[data-section-tab]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.activeSection = button.dataset.sectionTab;
-      syncSectionVisibility();
-      ensureSectionData(state.activeSection).catch(() => {});
-      if (state.activeSection === "charts") {
-        requestAnimationFrame(() => requestAnimationFrame(() => drawActuatorTimeline()));
-      }
+      activateSection(button.dataset.sectionTab);
     });
+  });
+}
+
+function bindOverviewHub() {
+  const hub = document.getElementById("overview-hub-grid");
+  if (!hub) return;
+  hub.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-overview-nav]");
+    if (!button) return;
+    const target = button.dataset.overviewNav;
+    if (target === "summary") {
+      document.getElementById("shared-summary-block")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    activateSection(target);
   });
 }
 
@@ -1328,6 +1483,7 @@ function bindEvents() {
     form.addEventListener("submit", handleConfigSubmit);
   });
   bindSectionTabs();
+  bindOverviewHub();
   bindConfigAccordions();
   bindModeToggles();
   bindUtilityActions();

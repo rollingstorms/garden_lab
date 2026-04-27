@@ -1,43 +1,45 @@
 {% extends "base.html" %}
 {% block body %}
 <main class="dashboard-shell">
-  <section class="top-shell">
-    <section class="hero">
-      <div class="hero-copy-wrap">
-        <p class="eyebrow">Garden Lab Mobile Console</p>
-        <h1>Equilibrium</h1>
-        <p class="hero-copy">
-          Control the lab, inspect telemetry, tune the algorithm, and keep the space stable from one mobile-first control surface.
-        </p>
-      </div>
-      <div class="hero-actions">
-        <button class="utility-button utility-button--secondary" id="refresh-button" type="button">Refresh</button>
-        <button class="utility-button" id="return-auto-button" type="button">Return All To Auto</button>
-        <button class="utility-button utility-button--danger" id="safe-shutdown-button" type="button">Safe Shutdown</button>
-      </div>
-    </section>
-
-    <section class="overview-panel">
-      <div class="panel-header panel-header--tight">
-        <div>
-          <p class="panel-meta">System</p>
-          <h2>Overview</h2>
-        </div>
-      </div>
-      <div class="status-banner" id="emergency-banner" hidden></div>
-      <div class="overview-deck" id="overview-deck"></div>
-    </section>
-  </section>
-
   <nav class="section-tabs" aria-label="Dashboard sections">
-    <button class="section-tab is-active" data-section-tab="control" type="button">Control</button>
+    <button class="section-tab is-active" data-section-tab="overview" type="button">Overview</button>
+    <button class="section-tab" data-section-tab="control" type="button">Control</button>
     <button class="section-tab" data-section-tab="sensors" type="button">Sensors</button>
     <button class="section-tab" data-section-tab="charts" type="button">Charts</button>
     <button class="section-tab" data-section-tab="config" type="button">Config</button>
   </nav>
 
   <section class="dashboard-sections">
-    <section class="dashboard-section is-active" data-section="control">
+    <section class="dashboard-section is-active" data-section="overview">
+      <section class="panel-card panel-card--overview-hub">
+        <div class="panel-header">
+          <div>
+            <p class="panel-meta">Dashboard</p>
+            <h2>Overview Hub</h2>
+          </div>
+        </div>
+        <div class="overview-hub-grid" id="overview-hub-grid">
+          <button class="overview-mini-card overview-mini-card--charts" data-overview-nav="charts" type="button">
+            <div class="overview-mini-card__meta">Charts</div>
+            <div class="mini-plot-grid" id="overview-mini-charts"></div>
+          </button>
+          <button class="overview-mini-card overview-mini-card--sensors" data-overview-nav="sensors" type="button">
+            <div class="overview-mini-card__meta">Sensors</div>
+            <div class="mini-reading-grid" id="overview-mini-sensors"></div>
+          </button>
+          <button class="overview-mini-card overview-mini-card--control" data-overview-nav="control" type="button">
+            <div class="overview-mini-card__meta">Control</div>
+            <div class="mini-control-grid" id="overview-mini-control"></div>
+          </button>
+          <button class="overview-mini-card overview-mini-card--summary" data-overview-nav="summary" type="button">
+            <div class="overview-mini-card__meta">Overview</div>
+            <div class="mini-summary-grid" id="overview-mini-summary"></div>
+          </button>
+        </div>
+      </section>
+    </section>
+
+    <section class="dashboard-section" data-section="control">
       <section class="panel-card panel-card--control">
         <div class="panel-header">
           <div>
@@ -197,6 +199,34 @@
           <button class="utility-button utility-button--secondary" id="reset-config-button" type="button">Reset To Defaults</button>
         </section>
       </section>
+    </section>
+  </section>
+
+  <section class="top-shell top-shell--shared" id="shared-summary-block">
+    <section class="hero">
+      <div class="hero-copy-wrap">
+        <p class="eyebrow">Garden Lab Mobile Console</p>
+        <h1>Equilibrium</h1>
+        <p class="hero-copy">
+          Control the lab, inspect telemetry, tune the algorithm, and keep the space stable from one mobile-first control surface.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button class="utility-button utility-button--secondary" id="refresh-button" type="button">Refresh</button>
+        <button class="utility-button" id="return-auto-button" type="button">Return All To Auto</button>
+        <button class="utility-button utility-button--danger" id="safe-shutdown-button" type="button">Safe Shutdown</button>
+      </div>
+    </section>
+
+    <section class="overview-panel">
+      <div class="panel-header panel-header--tight">
+        <div>
+          <p class="panel-meta">System</p>
+          <h2>Overview</h2>
+        </div>
+      </div>
+      <div class="status-banner" id="emergency-banner" hidden></div>
+      <div class="overview-deck" id="overview-deck"></div>
     </section>
   </section>
 
