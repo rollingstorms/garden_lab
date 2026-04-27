@@ -2,11 +2,36 @@
 {% block body %}
 <main class="dashboard-shell">
   <nav class="section-tabs" aria-label="Dashboard sections">
-    <button class="section-tab is-active" data-section-tab="overview" type="button">Overview</button>
-    <button class="section-tab" data-section-tab="control" type="button">Control</button>
-    <button class="section-tab" data-section-tab="sensors" type="button">Sensors</button>
-    <button class="section-tab" data-section-tab="charts" type="button">Charts</button>
-    <button class="section-tab" data-section-tab="config" type="button">Config</button>
+    <button class="section-tab is-active" data-section-tab="overview" type="button" aria-label="Overview">
+      <span class="tab-icon tab-icon--overview" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"></rect><rect x="14" y="4" width="6" height="6" rx="1.5"></rect><rect x="4" y="14" width="6" height="6" rx="1.5"></rect><rect x="14" y="14" width="6" height="6" rx="1.5"></rect></svg>
+      </span>
+      <span class="sr-only">Overview</span>
+    </button>
+    <button class="section-tab" data-section-tab="control" type="button" aria-label="Control">
+      <span class="tab-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M13.5 5.5 18.5 10.5 10 19l-4.5.5.5-4.5z"></path><path d="M12 7l5 5"></path><path d="M15.5 3.5 20.5 8.5"></path></svg>
+      </span>
+      <span class="sr-only">Control</span>
+    </button>
+    <button class="section-tab" data-section-tab="sensors" type="button" aria-label="Sensors">
+      <span class="tab-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M10 5a2 2 0 1 1 4 0v7.4a4.5 4.5 0 1 1-4 0z"></path><path d="M12 9v7"></path></svg>
+      </span>
+      <span class="sr-only">Sensors</span>
+    </button>
+    <button class="section-tab" data-section-tab="charts" type="button" aria-label="Charts">
+      <span class="tab-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M6 15 10 11 13 13 18 7"></path><path d="M18 7v4"></path></svg>
+      </span>
+      <span class="sr-only">Charts</span>
+    </button>
+    <button class="section-tab" data-section-tab="config" type="button" aria-label="Config">
+      <span class="tab-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7z"></path><path d="M4.5 13.5v-3l2-.5.8-1.8-1.1-1.8 2.1-2.1 1.8 1.1 1.8-.8.5-2h3l.5 2 1.8.8 1.8-1.1 2.1 2.1-1.1 1.8.8 1.8 2 .5v3l-2 .5-.8 1.8 1.1 1.8-2.1 2.1-1.8-1.1-1.8.8-.5 2h-3l-.5-2-1.8-.8-1.8 1.1-2.1-2.1 1.1-1.8-.8-1.8z"></path></svg>
+      </span>
+      <span class="sr-only">Config</span>
+    </button>
   </nav>
 
   <section class="dashboard-sections">
@@ -60,6 +85,19 @@
     </section>
 
     <section class="dashboard-section" data-section="control">
+      <section class="panel-card panel-card--control-actions">
+        <div class="panel-header panel-header--tight">
+          <div>
+            <p class="panel-meta">Lab Actions</p>
+            <h2>Quick Controls</h2>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button class="utility-button utility-button--secondary" id="refresh-button" type="button">Refresh</button>
+          <button class="utility-button" id="return-auto-button" type="button">Return All To Auto</button>
+          <button class="utility-button utility-button--danger" id="safe-shutdown-button" type="button">Safe Shutdown</button>
+        </div>
+      </section>
       <section class="panel-card panel-card--control">
         <div class="panel-header">
           <div>
@@ -223,21 +261,6 @@
   </section>
 
   <section class="top-shell top-shell--shared" id="shared-summary-block">
-    <section class="hero">
-      <div class="hero-copy-wrap">
-        <p class="eyebrow">Garden Lab Mobile Console</p>
-        <h1>Equilibrium</h1>
-        <p class="hero-copy">
-          Control the lab, inspect telemetry, tune the algorithm, and keep the space stable from one mobile-first control surface.
-        </p>
-      </div>
-      <div class="hero-actions">
-        <button class="utility-button utility-button--secondary" id="refresh-button" type="button">Refresh</button>
-        <button class="utility-button" id="return-auto-button" type="button">Return All To Auto</button>
-        <button class="utility-button utility-button--danger" id="safe-shutdown-button" type="button">Safe Shutdown</button>
-      </div>
-    </section>
-
     <section class="overview-panel">
       <div class="panel-header panel-header--tight">
         <div>

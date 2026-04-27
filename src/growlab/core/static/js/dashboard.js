@@ -141,6 +141,9 @@ async function loadHeavyState() {
 }
 
 function ensureSectionData(section) {
+  if (section === "overview" && !state.chartsData) {
+    return loadGardenCharts().catch(() => {});
+  }
   if (section === "charts") {
     const tasks = [];
     if (!state.chartsData) tasks.push(loadGardenCharts());
@@ -223,14 +226,9 @@ function renderOverviewHub() {
 
 function renderOverviewMiniSensors() {
   if (!els.overviewMiniSensors || !state.garden) return;
-  const metrics = [];
-  for (const sensor of Object.values(state.garden.sensors)) {
-    for (const [metricId, metric] of Object.entries(sensor.metrics)) {
-      metrics.push({ metricId, metric });
-    }
-  }
-  els.overviewMiniSensors.innerHTML = metrics.slice(0, 4).map(({ metricId, metric }) => `
-    <span class="mini-reading-card">
+  const metrics = pickPrioritySensorMetrics();
+  els.overviewMiniSensors.innerHTML = metrics.map(({ metricId, metric }) => `
+    <span class="mini-reading-card" style="${metricAccentStyle(metricColor(metric.label))}">
       <span class="mini-reading-card__label">${shortMetricLabel(metric.label)}</span>
       <span class="mini-reading-card__value">${formatMetricValue(metricId, metric.value)}</span>
     </span>
@@ -260,10 +258,10 @@ function renderOverviewMiniSummary() {
     ["Mode", decision.reason === "garden_emergency" ? "Emergency" : "Balance"],
     ["Overrides", String(activeOverrides)],
     ["Decision", humanizeReason(decision.decision || "idle")],
-    ["Diff", String(diffCount)],
+    ["Diffs", String(diffCount)],
   ];
   els.overviewMiniSummary.innerHTML = items.map(([label, value]) => `
-    <span class="mini-summary-card">
+    <span class="mini-summary-card ${label === "Diffs" ? "mini-summary-card--diff" : ""}">
       <span class="mini-summary-card__label">${label}</span>
       <span class="mini-summary-card__value">${value}</span>
     </span>
@@ -281,27 +279,21 @@ function renderOverviewMiniCharts() {
 }
 
 function pickOverviewChartSeries() {
-  const palette = {
-    temperature_c: "#ff9a68",
-    humidity_pct: "#78cfff",
-    lux: "#ffd970",
-    moisture_pct: "#6ef0a5",
-  };
-  const wanted = ["temperature_c", "humidity_pct", "lux", "moisture_pct"];
   const found = [];
-  if (state.chartsData?.sensors) {
-    for (const sensor of Object.values(state.chartsData.sensors)) {
-      for (const metricId of wanted) {
-        if (sensor.history?.[metricId] && !found.find((item) => item.metricId === metricId)) {
-          found.push({
-            metricId,
-            color: palette[metricId] || "#8ec8ff",
-            points: (sensor.history[metricId] || [])
-              .map((item) => Number(item.value))
-              .filter((value) => !Number.isNaN(value)),
-          });
-        }
-      }
+  const wanted = [
+    { key: "temperature", color: "#ff9a68" },
+    { key: "humidity", color: "#78cfff" },
+    { key: "lux", color: "#ffd970" },
+    { key: "moisture", color: "#6ef0a5" },
+  ];
+  for (const wantedSeries of wanted) {
+    const match = findChartSeries((metricId, metric) => metricMatches(metricId, metric?.label, wantedSeries.key));
+    if (match) {
+      found.push({
+        metricId: match.metricId,
+        color: wantedSeries.color,
+        points: match.points,
+      });
     }
   }
   while (found.length < 4) {
@@ -357,8 +349,9 @@ function renderSensors() {
   for (const sensor of Object.values(state.garden.sensors)) {
     for (const [metricId, metric] of Object.entries(sensor.metrics)) {
       const previous = metric.previous ?? null;
+      const accent = metricColor(metric.label);
       tiles.push(`
-        <article class="sensor-tile">
+        <article class="sensor-tile" style="${metricAccentStyle(accent)}">
           <div class="sensor-tile__label">${sensor.label}</div>
           <div class="sensor-tile__value">${formatMetricValue(metricId, metric.value)}</div>
           <div class="sensor-tile__unit">${metric.label}${displayMetricUnit(metricId, metric.unit) ? ` • ${displayMetricUnit(metricId, metric.unit)}` : ""}</div>
@@ -368,6 +361,49 @@ function renderSensors() {
     }
   }
   els.sensorStrip.innerHTML = tiles.join("");
+}
+
+function pickPrioritySensorMetrics() {
+  const wanted = ["temperature", "humidity", "lux", "moisture"];
+  const found = [];
+  for (const key of wanted) {
+    const metric = findGardenMetric((metricId, item) => metricMatches(metricId, item?.label, key));
+    if (metric) found.push(metric);
+  }
+  return found;
+}
+
+function findGardenMetric(predicate) {
+  for (const sensor of Object.values(state.garden?.sensors || {})) {
+    for (const [metricId, metric] of Object.entries(sensor.metrics || {})) {
+      if (predicate(metricId, metric, sensor)) return { metricId, metric, sensor };
+    }
+  }
+  return null;
+}
+
+function findChartSeries(predicate) {
+  for (const sensor of Object.values(state.chartsData?.sensors || {})) {
+    for (const [metricId, metric] of Object.entries(sensor.metrics || {})) {
+      if (!predicate(metricId, metric, sensor)) continue;
+      const points = (sensor.history?.[metricId] || [])
+        .map((item) => Number(item.value))
+        .filter((value) => !Number.isNaN(value));
+      if (!points.length) continue;
+      return { metricId, metric, points, sensor };
+    }
+  }
+  return null;
+}
+
+function metricMatches(metricId, label, key) {
+  const id = String(metricId || "").toLowerCase();
+  const text = String(label || "").toLowerCase();
+  if (key === "temperature") return id.includes("temperature") || text.includes("temperature");
+  if (key === "humidity") return id.includes("humidity") || text.includes("humidity");
+  if (key === "lux") return id === "lux" || text.includes("lux") || text.includes("light");
+  if (key === "moisture") return id.includes("moisture") || text.includes("moisture") || text.includes("soil");
+  return false;
 }
 
 function renderActuators() {
@@ -1157,6 +1193,10 @@ function chip(label, value) {
   return `<span class="config-chip"><strong>${label}</strong>${value}</span>`;
 }
 
+function metricAccentStyle(color) {
+  return `--metric-accent: ${color}; --metric-accent-soft: ${hexToRgba(color, 0.45)}; --metric-accent-glow: ${hexToRgba(color, 0.18)}; --metric-accent-line: ${hexToRgba(color, 0.3)};`;
+}
+
 function metricColor(label) {
   const value = label.toLowerCase();
   if (value.includes("temperature")) return "#ff9a68";
@@ -1588,13 +1628,14 @@ bindEvents();
 loadGardenState()
   .then(() => {
     syncSectionVisibility();
+    ensureSectionData(state.activeSection).catch(() => {});
   })
   .catch((error) => showToast(error.message, true));
 setInterval(() => {
   loadGardenState().catch(() => {});
 }, 5000);
 setInterval(() => {
-  if (state.activeSection !== "charts") return;
+  if (state.activeSection !== "charts" && state.activeSection !== "overview") return;
   loadGardenCharts().catch(() => {});
 }, 30000);
 setInterval(() => {

@@ -304,19 +304,54 @@ button {
 }
 
 .section-tab {
+  display: grid;
+  place-items: center;
   min-height: 42px;
   padding: 0.65rem 0.5rem;
   border-radius: 14px;
   color: var(--muted);
   background: transparent;
-  font-size: 0.88rem;
-  font-weight: 600;
 }
 
 .section-tab.is-active {
   color: #081211;
   background: linear-gradient(135deg, var(--accent), #c7ffdb);
   box-shadow: 0 8px 18px rgba(47, 203, 128, 0.2);
+}
+
+.tab-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tab-icon--overview svg rect {
+  fill: currentColor;
+  stroke: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .dashboard-section {
@@ -354,6 +389,12 @@ button {
 
 .top-shell--shared {
   margin-top: 1rem;
+}
+
+.panel-card--control-actions {
+  background:
+    radial-gradient(circle at top right, rgba(110, 240, 165, 0.06), transparent 26%),
+    linear-gradient(180deg, rgba(16, 31, 28, 0.98), rgba(10, 19, 18, 0.98));
 }
 
 .sensor-strip,
@@ -461,6 +502,13 @@ button {
   padding: 0.6rem;
 }
 
+.mini-reading-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.03)),
+    radial-gradient(circle at top right, var(--metric-accent-glow, rgba(142, 200, 255, 0.16)), transparent 48%);
+  border-color: var(--metric-accent-line, rgba(172, 229, 197, 0.08));
+}
+
 .mini-reading-card__label,
 .mini-summary-card__label {
   color: var(--muted);
@@ -474,6 +522,10 @@ button {
   margin-top: 0.28rem;
   font-size: 1rem;
   font-weight: 700;
+}
+
+.mini-reading-card__value {
+  color: var(--metric-accent, var(--text));
 }
 
 .mini-control-card {
@@ -509,7 +561,7 @@ button {
   min-height: 138px;
   padding: 0.9rem 0.95rem 0.9rem;
   background:
-    radial-gradient(circle at top right, rgba(120, 207, 255, 0.11), transparent 28%),
+    radial-gradient(circle at top right, var(--metric-accent-glow, rgba(120, 207, 255, 0.16)), transparent 28%),
     linear-gradient(180deg, rgba(20, 40, 36, 0.97), rgba(11, 22, 20, 0.98));
 }
 
@@ -521,7 +573,7 @@ button {
   bottom: 0.85rem;
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(120, 207, 255, 0.55), rgba(110, 240, 165, 0.45));
+  background: linear-gradient(90deg, var(--metric-accent, #78cfff), var(--metric-accent-soft, rgba(110, 240, 165, 0.45)));
 }
 
 .sensor-tile__label {
@@ -534,6 +586,7 @@ button {
   font-size: clamp(1.85rem, 8vw, 2.7rem);
   font-weight: 700;
   line-height: 1;
+  color: var(--metric-accent, var(--text));
 }
 
 .sensor-tile__unit {
@@ -546,6 +599,11 @@ button {
   margin-top: 1.15rem;
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.mini-summary-card--diff .mini-summary-card__value {
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
 }
 
 .device-card {
