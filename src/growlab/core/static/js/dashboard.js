@@ -34,6 +34,10 @@ const state = {
     index: null,
     locked: false,
   },
+  configEditing: {
+    dirtyForms: {},
+    submitting: false,
+  },
   configModes: {
     "climate-config": "simple",
     "light-config": "simple",
@@ -123,6 +127,7 @@ async function loadGardenHistory() {
 }
 
 async function loadGardenConfig() {
+  if (shouldDeferConfigRefresh()) return;
   state.configData = await fetchJson("/api/garden/config");
   renderOverview();
   renderOverviewHub();
@@ -1177,6 +1182,7 @@ function renderEmergencyForm() {
 }
 
 function renderForm({ form, modeKey, simpleFields, advancedValue, submitLabel, endpoint }) {
+  const isDirty = !!state.configEditing.dirtyForms[modeKey];
   const mode = state.configModes[modeKey];
   const body = mode === "advanced"
     ? `
@@ -1192,10 +1198,22 @@ function renderForm({ form, modeKey, simpleFields, advancedValue, submitLabel, e
     ${body}
     <div class="form-actions">
       <button class="utility-button" type="submit">${submitLabel}</button>
+      ${isDirty ? `<span class="device-subtle">Editing in progress. Auto-refresh paused.</span>` : ""}
     </div>
   `;
   form.dataset.endpoint = endpoint;
   form.dataset.modeKey = modeKey;
+}
+
+function shouldDeferConfigRefresh() {
+  if (state.configEditing.submitting) return true;
+  return Object.values(state.configEditing.dirtyForms).some(Boolean);
+}
+
+function markConfigFormDirty(modeKey, isDirty = true) {
+  if (!modeKey) return;
+  if (isDirty) state.configEditing.dirtyForms[modeKey] = true;
+  else delete state.configEditing.dirtyForms[modeKey];
 }
 
 function field(name, label, value, type = "text") {
@@ -1415,9 +1433,11 @@ async function handleActuatorAction(event) {
 async function handleConfigSubmit(event) {
   event.preventDefault();
   const form = event.target;
+  const modeKey = form.dataset.modeKey;
   const mode = state.configModes[form.dataset.modeKey];
   const formData = new FormData(form);
   let payload = { mode };
+  state.configEditing.submitting = true;
 
   if (mode === "advanced") {
     payload.advanced = JSON.parse(formData.get("advanced"));
@@ -1435,11 +1455,14 @@ async function handleConfigSubmit(event) {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
+    markConfigFormDirty(modeKey, false);
     showToast("Config updated");
     await fetchJson("/api/automations/run", { method: "POST" }).catch(() => {});
     await Promise.allSettled([loadGardenState(), loadGardenConfig(), loadGardenHistory()]);
   } catch (error) {
     showToast(error.message, true);
+  } finally {
+    state.configEditing.submitting = false;
   }
 }
 
@@ -1513,6 +1536,10 @@ function bindModeToggles() {
   document.querySelectorAll(".mode-toggle").forEach((button) => {
     button.addEventListener("click", () => {
       const target = button.dataset.target;
+      if (state.configEditing.dirtyForms[target]) {
+        showToast("Save this form before switching modes.", true);
+        return;
+      }
       state.configModes[target] = state.configModes[target] === "simple" ? "advanced" : "simple";
       button.textContent = state.configModes[target] === "simple" ? "Advanced" : "Simple";
       renderConfigForms();
@@ -1564,6 +1591,12 @@ function bindEvents() {
   document.querySelector(".config-stack").addEventListener("click", handleConfigPower);
   [els.climateForm, els.lightForm, els.wateringForm, els.emergencyForm].forEach((form) => {
     form.addEventListener("submit", handleConfigSubmit);
+    form.addEventListener("input", () => {
+      markConfigFormDirty(form.dataset.modeKey, true);
+    });
+    form.addEventListener("change", () => {
+      markConfigFormDirty(form.dataset.modeKey, true);
+    });
   });
   bindSectionTabs();
   bindOverviewHub();

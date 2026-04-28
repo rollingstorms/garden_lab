@@ -143,8 +143,8 @@ automations:
           bands:
             - sensor: air_lab
               metric: temperature_c
-              on_below: 34.0
-              off_above: 34.0
+              on_below: 28.0
+              off_above: 30.0
       light:
         actuator: lamps
         schedule:
