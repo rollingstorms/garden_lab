@@ -1,0 +1,29 @@
+drivers:
+  collector_sensor:
+    i2c_dps310: growlab.collector.drivers.sensor.i2c_dps310:DPS310Driver
+
+sensors:
+  pressure_lab:
+    label: Lab Pressure
+    enabled: true
+    source:
+      kind: collector
+      collector_id: pi_zero_lab
+      driver: i2c_dps310
+      poll:
+        every_seconds: 60
+      config:
+        bus: 1
+        address: 119
+        pressure_rate: 1
+        pressure_oversampling: 4
+        temperature_rate: 1
+        temperature_oversampling: 4
+        ready_timeout_seconds: 0.5
+    metrics:
+      temperature_c:
+        label: Temperature
+        unit: C
+      pressure_hpa:
+        label: Pressure
+        unit: hPa
