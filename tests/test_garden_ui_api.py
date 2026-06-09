@@ -356,6 +356,8 @@ def test_garden_state_uses_short_lived_cache_and_ingest_invalidates(tmp_path: Pa
 
     response = client.get("/api/garden/state")
     assert response.status_code == 200
+    assert response.headers["X-Garden-Endpoint"] == "state"
+    assert float(response.headers["X-Garden-Elapsed-Ms"]) >= 0
     response = client.get("/api/garden/state")
     assert response.status_code == 200
     assert call_count["snapshot"] == 1

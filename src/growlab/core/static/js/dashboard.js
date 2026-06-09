@@ -18,6 +18,8 @@ const CHART_RANGE_OPTIONS = [
 ];
 
 const DRUM_ITEM_H = 44;
+const REQUEST_TIMEOUT_MS = 12000;
+const SLOW_REQUEST_MS = 1000;
 
 const state = {
   garden: null,
@@ -47,6 +49,7 @@ const state = {
 };
 
 const charts = {};
+const inFlight = {};
 
 const els = {
   emergencyBanner: document.getElementById("emergency-banner"),
@@ -81,15 +84,42 @@ function isMobileLayout() {
 }
 
 async function fetchJson(url, options = {}) {
-  const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(formatApiError(payload, response.status));
+  const startedAt = performance.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || REQUEST_TIMEOUT_MS);
+  const requestOptions = { ...options };
+  delete requestOptions.timeoutMs;
+  try {
+    const response = await fetch(url, {
+      headers: { "Content-Type": "application/json" },
+      ...requestOptions,
+      signal: requestOptions.signal || controller.signal,
+    });
+    const elapsedMs = performance.now() - startedAt;
+    logDashboardTiming(url, elapsedMs, response);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(formatApiError(payload, response.status));
+    }
+    return response.json();
+  } catch (error) {
+    const elapsedMs = performance.now() - startedAt;
+    console.warn(`[dashboard] ${url} failed after ${elapsedMs.toFixed(0)}ms`, error);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  return response.json();
+}
+
+function logDashboardTiming(url, elapsedMs, response) {
+  if (!url.startsWith("/api/garden/") && !url.startsWith("/api/automations/")) return;
+  const serverMs = response.headers.get("X-Garden-Elapsed-Ms");
+  const message = `[dashboard] ${url} ${elapsedMs.toFixed(0)}ms${serverMs ? ` server=${serverMs}ms` : ""}`;
+  if (elapsedMs >= SLOW_REQUEST_MS) {
+    console.warn(message);
+  } else {
+    console.debug(message);
+  }
 }
 
 function formatApiError(payload, status) {
@@ -108,33 +138,63 @@ function formatApiError(payload, status) {
   return `Request failed: ${status}`;
 }
 
-async function loadGardenState() {
-  state.garden = await fetchJson("/api/garden/state");
+function applyGardenSnapshot(garden) {
+  if (!garden) return false;
+  state.garden = garden;
   reconcileOptimisticActuators();
   render();
+  return true;
+}
+
+async function loadGardenState() {
+  if (inFlight.gardenState) return inFlight.gardenState;
+  inFlight.gardenState = (async () => {
+    applyGardenSnapshot(await fetchJson("/api/garden/state"));
+  })().finally(() => {
+    inFlight.gardenState = null;
+  });
+  return inFlight.gardenState;
 }
 
 async function loadGardenCharts() {
-  state.chartsData = await fetchJson(`/api/garden/charts?hours=${state.chartHours}`);
-  renderCharts();
-  renderOverviewHub();
-  updateChartReadout();
+  if (inFlight.gardenCharts) return inFlight.gardenCharts;
+  inFlight.gardenCharts = (async () => {
+    state.chartsData = await fetchJson(`/api/garden/charts?hours=${state.chartHours}`);
+    renderCharts();
+    renderOverviewHub();
+    updateChartReadout();
+  })().finally(() => {
+    inFlight.gardenCharts = null;
+  });
+  return inFlight.gardenCharts;
 }
 
 async function loadGardenHistory() {
-  state.historyData = await fetchJson(`/api/garden/history?hours=${state.chartHours}`);
-  renderTimelines();
+  if (inFlight.gardenHistory) return inFlight.gardenHistory;
+  inFlight.gardenHistory = (async () => {
+    state.historyData = await fetchJson(`/api/garden/history?hours=${state.chartHours}`);
+    renderTimelines();
+  })().finally(() => {
+    inFlight.gardenHistory = null;
+  });
+  return inFlight.gardenHistory;
 }
 
 async function loadGardenConfig() {
   if (shouldDeferConfigRefresh()) return;
-  state.configData = await fetchJson("/api/garden/config");
-  renderOverview();
-  renderOverviewHub();
-  renderConfigDiff();
-  renderConfigSummaries();
-  renderConfigPowerStates();
-  renderConfigForms();
+  if (inFlight.gardenConfig) return inFlight.gardenConfig;
+  inFlight.gardenConfig = (async () => {
+    state.configData = await fetchJson("/api/garden/config");
+    renderOverview();
+    renderOverviewHub();
+    renderConfigDiff();
+    renderConfigSummaries();
+    renderConfigPowerStates();
+    renderConfigForms();
+  })().finally(() => {
+    inFlight.gardenConfig = null;
+  });
+  return inFlight.gardenConfig;
 }
 
 async function loadHeavyState() {
@@ -147,10 +207,7 @@ async function loadHeavyState() {
 
 function ensureSectionData(section) {
   if (section === "overview") {
-    const tasks = [];
-    if (!state.chartsData) tasks.push(loadGardenCharts());
-    if (!state.historyData) tasks.push(loadGardenHistory());
-    return Promise.allSettled(tasks);
+    return Promise.resolve();
   }
   if (section === "charts") {
     const tasks = [];
@@ -1396,8 +1453,10 @@ function describeDecision(item) {
 }
 
 async function runAutomationCycle() {
-  await fetchJson("/api/automations/run", { method: "POST" });
-  await loadGardenState();
+  const payload = await fetchJson("/api/automations/run", { method: "POST" });
+  if (!applyGardenSnapshot(payload.garden)) {
+    await loadGardenState();
+  }
 }
 
 async function handleActuatorAction(event) {
@@ -1411,18 +1470,21 @@ async function handleActuatorAction(event) {
   renderActuators();
 
   try {
+    let payload;
     if (action === "auto") {
-      await fetchJson(`/api/overrides/actuators/${actuatorId}`, { method: "DELETE" });
+      payload = await fetchJson(`/api/overrides/actuators/${actuatorId}`, { method: "DELETE" });
     } else {
-      const payload = { mode: action, reason: "dashboard_control" };
-      if (action === "pulse") payload.pulse_seconds = Number(button.dataset.seconds || "5");
-      await fetchJson(`/api/overrides/actuators/${actuatorId}`, {
+      const body = { mode: action, reason: "dashboard_control" };
+      if (action === "pulse") body.pulse_seconds = Number(button.dataset.seconds || "5");
+      payload = await fetchJson(`/api/overrides/actuators/${actuatorId}`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
     }
     showToast(`Updated ${labelizeActuator(actuatorId)}`);
-    loadGardenState().catch(() => {});
+    if (!applyGardenSnapshot(payload.garden)) {
+      loadGardenState().catch(() => {});
+    }
   } catch (error) {
     delete state.optimisticActuators[actuatorId];
     renderActuators();
@@ -1457,8 +1519,13 @@ async function handleConfigSubmit(event) {
     });
     markConfigFormDirty(modeKey, false);
     showToast("Config updated");
-    await fetchJson("/api/automations/run", { method: "POST" }).catch(() => {});
-    await Promise.allSettled([loadGardenState(), loadGardenConfig(), loadGardenHistory()]);
+    const automationPayload = await fetchJson("/api/automations/run", { method: "POST" }).catch(() => null);
+    if (!applyGardenSnapshot(automationPayload?.garden)) {
+      await loadGardenState();
+    }
+    const tasks = [loadGardenConfig()];
+    if (state.activeSection === "charts") tasks.push(loadGardenCharts(), loadGardenHistory());
+    await Promise.allSettled(tasks);
   } catch (error) {
     showToast(error.message, true);
   } finally {
@@ -1478,8 +1545,13 @@ async function handleConfigPower(event) {
       body: JSON.stringify({ enabled }),
     });
     showToast(`${labelizeActuator(module)} ${enabled ? "enabled" : "disabled"}.`);
-    await fetchJson("/api/automations/run", { method: "POST" }).catch(() => {});
-    await Promise.allSettled([loadGardenState(), loadGardenConfig(), loadGardenHistory()]);
+    const automationPayload = await fetchJson("/api/automations/run", { method: "POST" }).catch(() => null);
+    if (!applyGardenSnapshot(automationPayload?.garden)) {
+      await loadGardenState();
+    }
+    const tasks = [loadGardenConfig()];
+    if (state.activeSection === "charts") tasks.push(loadGardenCharts(), loadGardenHistory());
+    await Promise.allSettled(tasks);
   } catch (error) {
     showToast(error.message, true);
   }
@@ -1661,8 +1733,10 @@ function applyRangePicker() {
     document.getElementById("range-pill-label").textContent = opt.label;
     state.chartsData = null;
     state.historyData = null;
-    loadGardenCharts().catch(() => {});
-    loadGardenHistory().catch(() => {});
+    if (state.activeSection === "charts") {
+      loadGardenCharts().catch(() => {});
+      loadGardenHistory().catch(() => {});
+    }
   }
 }
 
@@ -1704,22 +1778,17 @@ bindEvents();
 loadGardenState()
   .then(() => {
     syncSectionVisibility();
-    ensureSectionData(state.activeSection).catch(() => {});
   })
   .catch((error) => showToast(error.message, true));
 setInterval(() => {
   loadGardenState().catch(() => {});
 }, 5000);
 setInterval(() => {
-  if (state.activeSection !== "charts" && state.activeSection !== "overview") return;
+  if (state.activeSection !== "charts") return;
   loadGardenCharts().catch(() => {});
 }, 30000);
 setInterval(() => {
   if (state.activeSection === "charts") {
-    loadGardenHistory().catch(() => {});
-    return;
-  }
-  if (state.activeSection === "overview") {
     loadGardenHistory().catch(() => {});
     return;
   }

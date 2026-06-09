@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
+from time import perf_counter
+from typing import Callable, TypeVar
 
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from growlab.core.app.dependencies import (
     get_actuator_state_service,
@@ -37,6 +40,9 @@ from growlab.shared.time import utc_isoformat
 router = APIRouter(prefix="/api")
 STATE_CACHE_TTL_SECONDS = 2.0
 HEAVY_CACHE_TTL_SECONDS = 20.0
+SLOW_GARDEN_ENDPOINT_SECONDS = 1.0
+T = TypeVar("T")
+logger = logging.getLogger(__name__)
 
 
 def require_write_access() -> bool:
@@ -49,6 +55,19 @@ def require_write_access() -> bool:
 
 def invalidate_dashboard_caches() -> None:
     get_dashboard_response_cache().invalidate_prefix(("garden",))
+
+
+def timed_garden_payload(name: str, response: Response, builder: Callable[[], T]) -> T:
+    started_at = perf_counter()
+    try:
+        return builder()
+    finally:
+        elapsed_seconds = perf_counter() - started_at
+        elapsed_ms = elapsed_seconds * 1000
+        response.headers["X-Garden-Endpoint"] = name
+        response.headers["X-Garden-Elapsed-Ms"] = f"{elapsed_ms:.1f}"
+        if elapsed_seconds >= SLOW_GARDEN_ENDPOINT_SECONDS:
+            logger.warning("Slow garden endpoint %s completed in %.1fms", name, elapsed_ms)
 
 
 @router.get("/health")
@@ -208,18 +227,24 @@ def actuator_command(
 
 @router.get("/garden/state")
 def garden_state(
+    response: Response,
     registry: EntityRegistry = Depends(get_registry),
     session: Session = Depends(get_db_session),
 ) -> dict:
-    return get_dashboard_response_cache().get_or_set(
-        ("garden", "state"),
-        ttl_seconds=STATE_CACHE_TTL_SECONDS,
-        builder=lambda: GardenStateService().snapshot(registry=registry, session=session),
+    return timed_garden_payload(
+        "state",
+        response,
+        lambda: get_dashboard_response_cache().get_or_set(
+            ("garden", "state"),
+            ttl_seconds=STATE_CACHE_TTL_SECONDS,
+            builder=lambda: GardenStateService().snapshot(registry=registry, session=session),
+        ),
     )
 
 
 @router.get("/garden/charts")
 def garden_charts(
+    response: Response,
     hours: int = 24,
     registry: EntityRegistry = Depends(get_registry),
     session: Session = Depends(get_db_session),
@@ -228,15 +253,20 @@ def garden_charts(
         hours = 1
     if hours > 168:
         hours = 168
-    return get_dashboard_response_cache().get_or_set(
-        ("garden", "charts", hours),
-        ttl_seconds=HEAVY_CACHE_TTL_SECONDS,
-        builder=lambda: GardenStateService().charts(registry=registry, session=session, hours=hours),
+    return timed_garden_payload(
+        "charts",
+        response,
+        lambda: get_dashboard_response_cache().get_or_set(
+            ("garden", "charts", hours),
+            ttl_seconds=HEAVY_CACHE_TTL_SECONDS,
+            builder=lambda: GardenStateService().charts(registry=registry, session=session, hours=hours),
+        ),
     )
 
 
 @router.get("/garden/history")
 def garden_history(
+    response: Response,
     hours: int = 24,
     session: Session = Depends(get_db_session),
 ) -> dict:
@@ -244,19 +274,27 @@ def garden_history(
         hours = 1
     if hours > 168:
         hours = 168
-    return get_dashboard_response_cache().get_or_set(
-        ("garden", "history", hours),
-        ttl_seconds=HEAVY_CACHE_TTL_SECONDS,
-        builder=lambda: GardenStateService().history(session=session, hours=hours),
+    return timed_garden_payload(
+        "history",
+        response,
+        lambda: get_dashboard_response_cache().get_or_set(
+            ("garden", "history", hours),
+            ttl_seconds=HEAVY_CACHE_TTL_SECONDS,
+            builder=lambda: GardenStateService().history(session=session, hours=hours),
+        ),
     )
 
 
 @router.get("/garden/config")
-def garden_config(session: Session = Depends(get_db_session)) -> dict:
-    return get_dashboard_response_cache().get_or_set(
-        ("garden", "config"),
-        ttl_seconds=HEAVY_CACHE_TTL_SECONDS,
-        builder=lambda: ConfigService().get_garden_config(),
+def garden_config(response: Response, session: Session = Depends(get_db_session)) -> dict:
+    return timed_garden_payload(
+        "config",
+        response,
+        lambda: get_dashboard_response_cache().get_or_set(
+            ("garden", "config"),
+            ttl_seconds=HEAVY_CACHE_TTL_SECONDS,
+            builder=lambda: ConfigService().get_garden_config(),
+        ),
     )
 
 
