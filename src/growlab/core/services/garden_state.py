@@ -16,7 +16,11 @@ from growlab.core.db.repo_events import (
     list_recent_system_events,
 )
 from growlab.core.db.repo_overrides import list_active_manual_overrides
-from growlab.core.db.repo_readings import get_latest_sensor_metrics_batch, get_sensor_history_batch
+from growlab.core.db.repo_readings import (
+    get_latest_sensor_metrics_batch,
+    get_recent_sensor_metric_rows_batch,
+    get_sensor_history_batch,
+)
 from growlab.core.services.configuration import ConfigService, GARDEN_AUTOMATION_ID
 from growlab.core.services.overrides import ManualOverrideService
 from growlab.shared.time import utc_isoformat
@@ -89,7 +93,7 @@ class GardenStateService:
             for sensor_id, sensor in registry.config.sensors.items()
             for metric_id in sensor.metrics
         ]
-        recent_history = get_sensor_history_batch(session, refs=refs, limit_per_metric=2)
+        recent_history = get_recent_sensor_metric_rows_batch(session, refs=refs, limit_per_metric=2)
         for sensor_id, sensor in registry.config.sensors.items():
             latest = latest_by_sensor.get(sensor_id, {})
             data[sensor_id] = {

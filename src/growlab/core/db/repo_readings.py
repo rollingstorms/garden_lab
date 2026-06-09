@@ -141,3 +141,24 @@ def get_sensor_history_batch(
     for row in session.execute(stmt).scalars().all():
         grouped.setdefault((row.sensor_id, row.metric), []).append(row)
     return grouped
+
+
+def get_recent_sensor_metric_rows_batch(
+    session: Session,
+    *,
+    refs: list[tuple[str, str]],
+    limit_per_metric: int = 2,
+) -> dict[tuple[str, str], list[SensorReading]]:
+    grouped: dict[tuple[str, str], list[SensorReading]] = {ref: [] for ref in refs}
+    if not refs or limit_per_metric < 1:
+        return grouped
+
+    for sensor_id, metric in refs:
+        stmt = (
+            select(SensorReading)
+            .where(SensorReading.sensor_id == sensor_id, SensorReading.metric == metric)
+            .order_by(desc(SensorReading.ts_utc), SensorReading.id.desc())
+            .limit(limit_per_metric)
+        )
+        grouped[(sensor_id, metric)] = list(reversed(session.execute(stmt).scalars().all()))
+    return grouped
