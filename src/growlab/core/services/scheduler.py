@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -23,28 +24,32 @@ class AutomationScheduler:
         self.automation_service = AutomationService()
 
     def start(self) -> None:
+        interval_seconds = max(1, int(self.app_config.automation_interval_seconds))
+        now = datetime.now(self.scheduler.timezone)
         self.scheduler.add_job(
             self.refresh_actuator_state_cache,
             trigger="interval",
-            seconds=self.app_config.automation_interval_seconds,
+            seconds=interval_seconds,
             id="actuator-state-refresh",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            next_run_time=now + timedelta(seconds=max(1, interval_seconds // 2)),
         )
         self.scheduler.add_job(
             self.run_cycle,
             trigger="interval",
-            seconds=self.app_config.automation_interval_seconds,
+            seconds=interval_seconds,
             id="automation-cycle",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            next_run_time=now + timedelta(seconds=interval_seconds),
         )
         self.scheduler.start()
         logger.info(
             "Started automation scheduler with %s second interval",
-            self.app_config.automation_interval_seconds,
+            interval_seconds,
         )
 
     def shutdown(self) -> None:
