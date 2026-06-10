@@ -194,6 +194,9 @@ def test_config_patch_updates_local_override_and_reload(tmp_path: Path, monkeypa
             "interval_minutes": 180,
             "run_seconds": 45,
             "anchor": "07:30",
+            "start_below": "",
+            "stop_above": "",
+            "max_run_seconds": "",
         },
     )
     assert response.status_code == 200

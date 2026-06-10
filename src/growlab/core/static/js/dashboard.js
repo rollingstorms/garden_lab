@@ -1506,9 +1506,10 @@ async function handleConfigSubmit(event) {
   } else {
     payload = { ...payload, ...Object.fromEntries(formData.entries()) };
     for (const [key, value] of Object.entries(payload)) {
-      if (value === "true") payload[key] = true;
+      if (value === "") delete payload[key];
+      else if (value === "true") payload[key] = true;
       else if (value === "false") payload[key] = false;
-      else if (value !== "" && !String(value).includes(":") && !Number.isNaN(Number(value))) payload[key] = Number(value);
+      else if (!String(value).includes(":") && !Number.isNaN(Number(value))) payload[key] = Number(value);
     }
   }
 

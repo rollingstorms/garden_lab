@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SensorIngestPayload(BaseModel):
@@ -65,6 +65,19 @@ class WateringConfigPatchPayload(BaseModel):
     stop_above: Optional[float] = None
     max_run_seconds: Optional[int] = Field(default=None, gt=0)
     advanced: Optional[dict[str, Any]] = None
+
+    @field_validator(
+        "interval_minutes",
+        "run_seconds",
+        "anchor",
+        "start_below",
+        "stop_above",
+        "max_run_seconds",
+        mode="before",
+    )
+    @classmethod
+    def blank_optional_values_are_absent(cls, value):
+        return None if value == "" else value
 
 
 class EmergencyConfigPatchPayload(BaseModel):
