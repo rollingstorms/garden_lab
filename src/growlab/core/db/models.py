@@ -72,6 +72,9 @@ class ActuatorStateHistory(Base):
 
 class AutomationEvent(Base):
     __tablename__ = "automation_events"
+    __table_args__ = (
+        Index("ix_automation_events_automation_ts", "automation_id", "ts_utc"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     automation_id: Mapped[str] = mapped_column(String(120), index=True)
@@ -83,6 +86,9 @@ class AutomationEvent(Base):
 
 class ManualOverride(Base):
     __tablename__ = "manual_overrides"
+    __table_args__ = (
+        Index("ix_manual_overrides_status_expires", "status", "expires_at_utc"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     actuator_id: Mapped[str] = mapped_column(String(120), index=True)

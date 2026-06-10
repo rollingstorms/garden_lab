@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
 from growlab.core.config.models import AppConfig
@@ -24,6 +24,24 @@ def _configure_sqlite_engine(engine) -> None:
         cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute("PRAGMA busy_timeout=30000")
         cursor.close()
+
+
+def ensure_sqlite_runtime_indexes(engine) -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_automation_events_automation_ts "
+                "ON automation_events (automation_id, ts_utc)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_manual_overrides_status_expires "
+                "ON manual_overrides (status, expires_at_utc)"
+            )
+        )
 
 
 def build_session_factory(app_config: AppConfig):

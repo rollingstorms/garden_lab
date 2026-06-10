@@ -9,7 +9,7 @@ if str(SRC) not in sys.path:
 
 from growlab.core.config.loader import load_config
 from growlab.core.db.models import Base
-from growlab.core.db.session import build_engine
+from growlab.core.db.session import build_engine, ensure_sqlite_runtime_indexes
 
 
 def main() -> None:
@@ -18,6 +18,7 @@ def main() -> None:
     config = load_config(base, local)
     engine = build_engine(config.app)
     Base.metadata.create_all(engine)
+    ensure_sqlite_runtime_indexes(engine)
 
 
 if __name__ == "__main__":

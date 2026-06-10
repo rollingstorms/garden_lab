@@ -9,7 +9,7 @@ from growlab.core.app.dependencies import get_config
 from growlab.core.app.routes_api import router as api_router
 from growlab.core.app.routes_dashboard import router as dashboard_router
 from growlab.core.db.models import Base
-from growlab.core.db.session import build_engine
+from growlab.core.db.session import build_engine, ensure_sqlite_runtime_indexes
 from growlab.core.services.scheduler import AutomationScheduler
 
 
@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
     config = get_config()
     engine = build_engine(config.app)
     Base.metadata.create_all(engine)
+    ensure_sqlite_runtime_indexes(engine)
 
     app = FastAPI(title="garden_lab core", lifespan=lifespan)
     app.include_router(api_router)
